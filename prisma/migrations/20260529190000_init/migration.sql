@@ -77,19 +77,6 @@ CREATE TABLE `RefreshToken` (
 ) DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
 
 -- CreateTable
-CREATE TABLE `Product` (
-    `id` INTEGER NOT NULL AUTO_INCREMENT,
-    `sku` VARCHAR(120) NOT NULL,
-    `price` DECIMAL(12, 2) NOT NULL,
-    `isActive` BOOLEAN NOT NULL DEFAULT true,
-    `createdAt` DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
-    `updatedAt` DATETIME(3) NOT NULL,
-
-    UNIQUE INDEX `Product_sku_key`(`sku`),
-    PRIMARY KEY (`id`)
-) DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
-
--- CreateTable
 CREATE TABLE `Language` (
     `id` INTEGER NOT NULL AUTO_INCREMENT,
     `code` VARCHAR(20) NOT NULL,
@@ -119,24 +106,6 @@ CREATE TABLE `ImageConfig` (
     `updatedAt` DATETIME(3) NOT NULL,
 
     UNIQUE INDEX `ImageConfig_code_key`(`code`),
-    PRIMARY KEY (`id`)
-) DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
-
--- CreateTable
-CREATE TABLE `ProductTranslation` (
-    `id` INTEGER NOT NULL AUTO_INCREMENT,
-    `productId` INTEGER NOT NULL,
-    `lang` VARCHAR(20) NOT NULL,
-    `title` VARCHAR(255) NOT NULL,
-    `slug` VARCHAR(255) NOT NULL,
-    `description` TEXT NULL,
-    `createdAt` DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
-    `updatedAt` DATETIME(3) NOT NULL,
-
-    INDEX `ProductTranslation_lang_title_idx`(`lang`, `title`),
-    INDEX `ProductTranslation_productId_idx`(`productId`),
-    UNIQUE INDEX `ProductTranslation_productId_lang_key`(`productId`, `lang`),
-    UNIQUE INDEX `ProductTranslation_lang_slug_key`(`lang`, `slug`),
     PRIMARY KEY (`id`)
 ) DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
 
@@ -271,12 +240,6 @@ ALTER TABLE `RolePermission` ADD CONSTRAINT `RolePermission_permissionId_fkey` F
 ALTER TABLE `RefreshToken` ADD CONSTRAINT `RefreshToken_adminId_fkey` FOREIGN KEY (`adminId`) REFERENCES `AdminUser`(`id`) ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE `ProductTranslation` ADD CONSTRAINT `ProductTranslation_productId_fkey` FOREIGN KEY (`productId`) REFERENCES `Product`(`id`) ON DELETE CASCADE ON UPDATE CASCADE;
-
--- AddForeignKey
-ALTER TABLE `ProductTranslation` ADD CONSTRAINT `ProductTranslation_lang_fkey` FOREIGN KEY (`lang`) REFERENCES `Language`(`code`) ON DELETE RESTRICT ON UPDATE CASCADE;
-
--- AddForeignKey
 ALTER TABLE `AuditLog` ADD CONSTRAINT `AuditLog_adminId_fkey` FOREIGN KEY (`adminId`) REFERENCES `AdminUser`(`id`) ON DELETE SET NULL ON UPDATE CASCADE;
 
 -- AddForeignKey
@@ -293,3 +256,4 @@ ALTER TABLE `BannerTranslation` ADD CONSTRAINT `BannerTranslation_bannerId_fkey`
 
 -- AddForeignKey
 ALTER TABLE `BannerTranslation` ADD CONSTRAINT `BannerTranslation_lang_fkey` FOREIGN KEY (`lang`) REFERENCES `Language`(`code`) ON DELETE RESTRICT ON UPDATE CASCADE;
+
