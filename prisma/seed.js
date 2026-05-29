@@ -48,6 +48,22 @@ async function main() {
         "banners.create",
         "banners.update",
         "banners.delete",
+        "service_types.read",
+        "service_types.create",
+        "service_types.update",
+        "service_types.delete",
+        "feature_definitions.read",
+        "feature_definitions.create",
+        "feature_definitions.update",
+        "feature_definitions.delete",
+        "attribute_groups.read",
+        "attribute_groups.create",
+        "attribute_groups.update",
+        "attribute_groups.delete",
+        "businesses.read",
+        "businesses.create",
+        "businesses.update",
+        "businesses.delete",
         "audit_logs.read",
         "error_logs.read",
     ];
@@ -155,6 +171,150 @@ async function main() {
             folderName: "admins",
         },
     );
+
+    const marketplaceImageConfigs = [
+        { code: "business_primary", width: 1200, height: 800, thumbnailWidth: 360, thumbnailHeight: 240, folderName: "businesses" },
+        { code: "business_gallery", width: 1600, height: 1000, thumbnailWidth: 400, thumbnailHeight: 250, folderName: "business-gallery" },
+        { code: "banner", width: 1440, height: 480, thumbnailWidth: 480, thumbnailHeight: 160, folderName: "banners" },
+        { code: "slideshow", width: 1600, height: 700, thumbnailWidth: 480, thumbnailHeight: 210, folderName: "slideshows" },
+    ];
+
+    for (const config of marketplaceImageConfigs) {
+        await createIfMissing(prisma.imageConfig, { code: config.code }, config);
+    }
+
+    const serviceTypes = [
+        { code: "restaurant", title: "Restaurant", icon: "hgi-restaurant-01", color: "#ef4444", description: "Restaurants, cafes, and food ordering services.", displayOrder: 10 },
+        { code: "beauty_salon", title: "Beauty Salon", icon: "hgi-brush", color: "#ec4899", description: "Beauty salons, appointment booking, and personal care services.", displayOrder: 20 },
+        { code: "tourist_place", title: "Tourist Place", icon: "hgi-mountain", color: "#14b8a6", description: "Attractions, trip destinations, tickets, and visit booking.", displayOrder: 30 },
+    ];
+
+    for (const item of serviceTypes) {
+        await prisma.serviceType.upsert({
+            where: { code: item.code },
+            update: {},
+            create: { ...item, isActive: true },
+        });
+    }
+
+    const serviceTypeRows = await prisma.serviceType.findMany({
+        where: { code: { in: serviceTypes.map((item) => item.code) } },
+        select: { id: true, code: true },
+    });
+    const serviceTypeMap = new Map(serviceTypeRows.map((item) => [item.code, item.id]));
+
+    const features = [
+        ["restaurant", "wifi", "Wi-Fi", "hgi-wifi-01", 10],
+        ["restaurant", "wheelchair_access", "Wheelchair access", "hgi-disability-01", 20],
+        ["restaurant", "parking", "Parking", "hgi-car-parking-02", 30],
+        ["restaurant", "outdoor_seating", "Outdoor seating", "hgi-chair-02", 40],
+        ["beauty_salon", "online_booking", "Online booking", "hgi-calendar-03", 10],
+        ["beauty_salon", "private_room", "Private room", "hgi-door-01", 20],
+        ["beauty_salon", "parking", "Parking", "hgi-car-parking-02", 30],
+        ["tourist_place", "parking", "Parking", "hgi-car-parking-02", 10],
+        ["tourist_place", "guided_tour", "Guided tour", "hgi-user-speaking", 20],
+        ["tourist_place", "family_friendly", "Family friendly", "hgi-family", 30],
+    ];
+
+    for (const [serviceCode, key, title, icon, displayOrder] of features) {
+        const serviceTypeId = serviceTypeMap.get(serviceCode);
+        if (!serviceTypeId) continue;
+        await prisma.featureDefinition.upsert({
+            where: { serviceTypeId_key: { serviceTypeId, key } },
+            update: {},
+            create: { serviceTypeId, key, title, icon, displayOrder, isActive: true },
+        });
+    }
+
+    const attributeGroups = [
+        {
+            serviceCode: "restaurant",
+            code: "atmosphere",
+            title: "Atmosphere",
+            icon: "hgi-sparkles",
+            selectionMode: "MULTIPLE",
+            displayOrder: 10,
+            options: [
+                ["romantic", "Romantic", "#ef4444", 10],
+                ["calm", "Calm", "#14b8a6", 20],
+                ["modern", "Modern", "#6366f1", 30],
+                ["family_friendly", "Family friendly", "#f59e0b", 40],
+            ],
+        },
+        {
+            serviceCode: "restaurant",
+            code: "cuisine",
+            title: "Cuisine",
+            icon: "hgi-restaurant-02",
+            selectionMode: "MULTIPLE",
+            displayOrder: 20,
+            options: [
+                ["iranian", "Iranian", "#22c55e", 10],
+                ["italian", "Italian", "#ef4444", 20],
+                ["fast_food", "Fast food", "#f97316", 30],
+            ],
+        },
+        {
+            serviceCode: "beauty_salon",
+            code: "specialty",
+            title: "Specialty",
+            icon: "hgi-brush",
+            selectionMode: "MULTIPLE",
+            displayOrder: 10,
+            options: [
+                ["hair_coloring", "Hair coloring", "#a855f7", 10],
+                ["nails", "Nails", "#ec4899", 20],
+                ["makeup", "Makeup", "#f43f5e", 30],
+                ["skincare", "Skincare", "#14b8a6", 40],
+            ],
+        },
+        {
+            serviceCode: "tourist_place",
+            code: "visit_type",
+            title: "Visit type",
+            icon: "hgi-location-04",
+            selectionMode: "MULTIPLE",
+            displayOrder: 10,
+            options: [
+                ["nature", "Nature", "#22c55e", 10],
+                ["historical", "Historical", "#f59e0b", 20],
+                ["adventure", "Adventure", "#0ea5e9", 30],
+            ],
+        },
+    ];
+
+    for (const group of attributeGroups) {
+        const serviceTypeId = serviceTypeMap.get(group.serviceCode);
+        if (!serviceTypeId) continue;
+        const groupRow = await prisma.attributeGroup.upsert({
+            where: { serviceTypeId_code: { serviceTypeId, code: group.code } },
+            update: {},
+            create: {
+                serviceTypeId,
+                code: group.code,
+                title: group.title,
+                icon: group.icon,
+                selectionMode: group.selectionMode,
+                displayOrder: group.displayOrder,
+                isActive: true,
+            },
+        });
+
+        for (const [key, title, color, displayOrder] of group.options) {
+            await prisma.attributeOption.upsert({
+                where: { groupId_key: { groupId: groupRow.id, key } },
+                update: {},
+                create: {
+                    groupId: groupRow.id,
+                    key,
+                    title,
+                    color,
+                    displayOrder,
+                    isActive: true,
+                },
+            });
+        }
+    }
 
     // eslint-disable-next-line no-console
     console.log("Seed complete.");

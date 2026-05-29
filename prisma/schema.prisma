@@ -31,6 +31,11 @@ enum BannerPlacement {
   E
 }
 
+enum AttributeSelectionMode {
+  SINGLE
+  MULTIPLE
+}
+
 model AdminUser {
   id             Int             @id @default(autoincrement())
   email          String          @unique @db.VarChar(191)
@@ -119,6 +124,7 @@ model Language {
   updatedAt             DateTime               @updatedAt
   slideshowTranslations SlideshowTranslation[]
   bannerTranslations    BannerTranslation[]
+  businessTranslations  BusinessTranslation[]
 
   @@index([isActive])
 }
@@ -249,6 +255,156 @@ model BannerTranslation {
   @@index([lang, title])
   @@index([lang, isActive])
   @@index([bannerId])
+}
+
+model ServiceType {
+  id                 Int                 @id @default(autoincrement())
+  code               String              @unique @db.VarChar(80)
+  title              String              @db.VarChar(160)
+  icon               String?             @db.VarChar(120)
+  color              String?             @db.VarChar(30)
+  description        String?             @db.VarChar(500)
+  displayOrder       Int                 @default(0)
+  isActive           Boolean             @default(true)
+  createdAt          DateTime            @default(now())
+  updatedAt          DateTime            @updatedAt
+  featureDefinitions FeatureDefinition[]
+  attributeGroups    AttributeGroup[]
+  businesses         Business[]
+
+  @@index([isActive, displayOrder])
+}
+
+model FeatureDefinition {
+  id               Int               @id @default(autoincrement())
+  serviceTypeId    Int
+  key              String            @db.VarChar(120)
+  title            String            @db.VarChar(160)
+  icon             String?           @db.VarChar(120)
+  description      String?           @db.VarChar(500)
+  displayOrder     Int               @default(0)
+  isActive         Boolean           @default(true)
+  createdAt        DateTime          @default(now())
+  updatedAt        DateTime          @updatedAt
+  serviceType      ServiceType       @relation(fields: [serviceTypeId], references: [id], onDelete: Cascade)
+  businessFeatures BusinessFeature[]
+
+  @@unique([serviceTypeId, key])
+  @@index([serviceTypeId, isActive, displayOrder])
+}
+
+model AttributeGroup {
+  id            Int                    @id @default(autoincrement())
+  serviceTypeId Int
+  code          String                 @db.VarChar(120)
+  title         String                 @db.VarChar(160)
+  icon          String?                @db.VarChar(120)
+  selectionMode AttributeSelectionMode @default(MULTIPLE)
+  displayOrder  Int                    @default(0)
+  isActive      Boolean                @default(true)
+  createdAt     DateTime               @default(now())
+  updatedAt     DateTime               @updatedAt
+  serviceType   ServiceType            @relation(fields: [serviceTypeId], references: [id], onDelete: Cascade)
+  options       AttributeOption[]
+
+  @@unique([serviceTypeId, code])
+  @@index([serviceTypeId, isActive, displayOrder])
+}
+
+model AttributeOption {
+  id                 Int                 @id @default(autoincrement())
+  groupId            Int
+  key                String              @db.VarChar(120)
+  title              String              @db.VarChar(160)
+  icon               String?             @db.VarChar(120)
+  color              String?             @db.VarChar(30)
+  displayOrder       Int                 @default(0)
+  isActive           Boolean             @default(true)
+  createdAt          DateTime            @default(now())
+  updatedAt          DateTime            @updatedAt
+  group              AttributeGroup      @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  businessAttributes BusinessAttribute[]
+
+  @@unique([groupId, key])
+  @@index([groupId, isActive, displayOrder])
+}
+
+model Business {
+  id                 Int                   @id @default(autoincrement())
+  serviceTypeId      Int
+  slug               String                @unique @db.VarChar(160)
+  primaryImage       String?               @db.VarChar(500)
+  phone              String?               @db.VarChar(80)
+  website            String?               @db.VarChar(500)
+  latitude           Decimal?              @db.Decimal(10, 7)
+  longitude          Decimal?              @db.Decimal(10, 7)
+  displayOrder       Int                   @default(0)
+  isActive           Boolean               @default(true)
+  isFeatured         Boolean               @default(false)
+  createdAt          DateTime              @default(now())
+  updatedAt          DateTime              @updatedAt
+  serviceType        ServiceType           @relation(fields: [serviceTypeId], references: [id], onDelete: Restrict)
+  translations       BusinessTranslation[]
+  gallery            BusinessGallery[]
+  businessFeatures   BusinessFeature[]
+  businessAttributes BusinessAttribute[]
+
+  @@index([serviceTypeId, isActive, displayOrder])
+  @@index([isFeatured])
+}
+
+model BusinessTranslation {
+  id             Int      @id @default(autoincrement())
+  businessId     Int
+  lang           String   @db.VarChar(20)
+  title          String   @db.VarChar(255)
+  summary        String?  @db.VarChar(500)
+  description    String?  @db.Text
+  address        String?  @db.VarChar(500)
+  seoTitle       String?  @db.VarChar(255)
+  seoDescription String?  @db.VarChar(500)
+  isActive       Boolean  @default(true)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+  business       Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  language       Language @relation(fields: [lang], references: [code], onDelete: Restrict, onUpdate: Cascade)
+
+  @@unique([businessId, lang])
+  @@index([lang, title])
+  @@index([lang, isActive])
+}
+
+model BusinessGallery {
+  id           Int      @id @default(autoincrement())
+  businessId   Int
+  image        String   @db.VarChar(500)
+  alt          String?  @db.VarChar(255)
+  displayOrder Int      @default(0)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+  business     Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+
+  @@index([businessId, displayOrder])
+}
+
+model BusinessFeature {
+  businessId          Int
+  featureDefinitionId Int
+  createdAt           DateTime          @default(now())
+  business            Business          @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  featureDefinition   FeatureDefinition @relation(fields: [featureDefinitionId], references: [id], onDelete: Cascade)
+
+  @@id([businessId, featureDefinitionId])
+}
+
+model BusinessAttribute {
+  businessId        Int
+  attributeOptionId Int
+  createdAt         DateTime        @default(now())
+  business          Business        @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  attributeOption   AttributeOption @relation(fields: [attributeOptionId], references: [id], onDelete: Cascade)
+
+  @@id([businessId, attributeOptionId])
 }
 
 
