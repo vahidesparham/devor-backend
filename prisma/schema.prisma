@@ -1,0 +1,254 @@
+generator client {
+  provider = "prisma-client-js"
+  output   = "../src/generated/prisma-client"
+}
+
+datasource db {
+  provider = "mysql"
+  url      = env("DATABASE_URL")
+}
+
+enum AuditAction {
+  CREATE
+  UPDATE
+  DELETE
+  BULK
+  LOGIN
+  LOGOUT
+  REFRESH
+}
+
+enum TextDirection {
+  LTR
+  RTL
+}
+
+enum BannerPlacement {
+  A
+  B
+  C
+  D
+  E
+}
+
+model AdminUser {
+  id             Int             @id @default(autoincrement())
+  email          String          @unique @db.VarChar(191)
+  firstName      String?         @db.VarChar(100)
+  lastName       String?         @db.VarChar(100)
+  avatar         String?         @db.VarChar(500)
+  passwordHash   String          @db.VarChar(255)
+  isActive       Boolean         @default(true)
+  createdAt      DateTime        @default(now())
+  updatedAt      DateTime        @updatedAt
+  adminUserRoles AdminUserRole[]
+  refreshTokens  RefreshToken[]
+  auditLogs      AuditLog[]
+  errorLogs      ErrorLog[]
+}
+
+model Role {
+  id             Int              @id @default(autoincrement())
+  name           String           @unique @db.VarChar(191)
+  title          String?          @db.VarChar(120)
+  icon           String?          @db.VarChar(120)
+  color          String?          @db.VarChar(30)
+  description    String?          @db.VarChar(255)
+  createdAt      DateTime         @default(now())
+  updatedAt      DateTime         @updatedAt
+  adminUserRoles AdminUserRole[]
+  rolePermissions RolePermission[]
+}
+
+model Permission {
+  id              Int              @id @default(autoincrement())
+  key             String           @unique @db.VarChar(191)
+  description     String?          @db.VarChar(255)
+  createdAt       DateTime         @default(now())
+  rolePermissions RolePermission[]
+}
+
+model AdminUserRole {
+  adminUserId Int
+  roleId      Int
+  createdAt   DateTime @default(now())
+
+  adminUser AdminUser @relation(fields: [adminUserId], references: [id], onDelete: Cascade)
+  role      Role      @relation(fields: [roleId], references: [id], onDelete: Cascade)
+
+  @@id([adminUserId, roleId])
+}
+
+model RolePermission {
+  roleId       Int
+  permissionId Int
+  createdAt    DateTime @default(now())
+
+  role       Role       @relation(fields: [roleId], references: [id], onDelete: Cascade)
+  permission Permission @relation(fields: [permissionId], references: [id], onDelete: Cascade)
+
+  @@id([roleId, permissionId])
+}
+
+model RefreshToken {
+  id                 Int       @id @default(autoincrement())
+  adminId            Int
+  tokenHash          String    @unique @db.VarChar(191)
+  expiresAt          DateTime?
+  revokedAt          DateTime?
+  revokedReason      String?   @db.VarChar(255)
+  replacedByTokenHash String?  @db.VarChar(191)
+  createdByIp        String?   @db.VarChar(100)
+  userAgent          String?   @db.VarChar(255)
+  createdAt          DateTime  @default(now())
+
+  admin AdminUser @relation(fields: [adminId], references: [id], onDelete: Cascade)
+
+  @@index([adminId])
+}
+
+model Language {
+  id                    Int                    @id @default(autoincrement())
+  code                  String                 @unique @db.VarChar(20)
+  name                  String                 @db.VarChar(100)
+  nativeName            String?                @db.VarChar(100)
+  direction             TextDirection          @default(LTR)
+  isActive              Boolean                @default(true)
+  isDefault             Boolean                @default(false)
+  createdAt             DateTime               @default(now())
+  updatedAt             DateTime               @updatedAt
+  slideshowTranslations SlideshowTranslation[]
+  bannerTranslations    BannerTranslation[]
+
+  @@index([isActive])
+}
+
+model ImageConfig {
+  id              Int      @id @default(autoincrement())
+  code            String   @unique @db.VarChar(80)
+  width           Int
+  height          Int
+  thumbnailWidth  Int
+  thumbnailHeight Int
+  folderName      String   @db.VarChar(120)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+}
+
+model AuditLog {
+  id        BigInt      @id @default(autoincrement())
+  createdAt DateTime    @default(now())
+  traceId   String?     @db.VarChar(100)
+  adminId   Int?
+  action    AuditAction
+  entity    String      @db.VarChar(120)
+  entityId  String?     @db.VarChar(120)
+  method    String      @db.VarChar(10)
+  path      String      @db.VarChar(255)
+  ip        String?     @db.VarChar(100)
+  userAgent String?     @db.VarChar(255)
+  before    Json?
+  after     Json?
+  details   Json?
+
+  admin AdminUser? @relation(fields: [adminId], references: [id], onDelete: SetNull)
+
+  @@index([adminId])
+  @@index([traceId])
+  @@index([entity, entityId])
+}
+
+model ErrorLog {
+  id         BigInt    @id @default(autoincrement())
+  createdAt  DateTime  @default(now())
+  traceId    String?   @db.VarChar(100)
+  adminId    Int?
+  method     String    @db.VarChar(10)
+  path       String    @db.VarChar(255)
+  query      Json?
+  ip         String?   @db.VarChar(100)
+  userAgent  String?   @db.VarChar(255)
+  statusCode Int
+  code       String    @db.VarChar(120)
+  message    String    @db.VarChar(500)
+  stack      String?   @db.Text
+  details    Json?
+  durationMs Float?
+
+  admin AdminUser? @relation(fields: [adminId], references: [id], onDelete: SetNull)
+
+  @@index([adminId])
+  @@index([traceId])
+  @@index([statusCode, code])
+}
+
+
+model Slideshow {
+  id           Int                   @id @default(autoincrement())
+  fromDate     DateTime?
+  toDate       DateTime?
+  createdAt    DateTime              @default(now())
+  updatedAt    DateTime              @updatedAt
+  translations SlideshowTranslation[]
+
+  @@index([fromDate])
+  @@index([toDate])
+  @@index([createdAt])
+}
+
+model SlideshowTranslation {
+  id          Int       @id @default(autoincrement())
+  slideshowId Int
+  lang        String    @db.VarChar(20)
+  title       String    @db.VarChar(255)
+  link        String?   @db.VarChar(500)
+  image       String    @db.VarChar(500)
+  isActive    Boolean   @default(true)
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  slideshow Slideshow @relation(fields: [slideshowId], references: [id], onDelete: Cascade)
+  language  Language  @relation(fields: [lang], references: [code], onDelete: Restrict, onUpdate: Cascade)
+
+  @@unique([slideshowId, lang])
+  @@index([lang, title])
+  @@index([lang, isActive])
+  @@index([slideshowId])
+}
+
+model Banner {
+  id           Int                @id @default(autoincrement())
+  placement    BannerPlacement
+  fromDate     DateTime?
+  toDate       DateTime?
+  createdAt    DateTime           @default(now())
+  updatedAt    DateTime           @updatedAt
+  translations BannerTranslation[]
+
+  @@index([placement])
+  @@index([fromDate])
+  @@index([toDate])
+  @@index([createdAt])
+}
+
+model BannerTranslation {
+  id        Int      @id @default(autoincrement())
+  bannerId  Int
+  lang      String   @db.VarChar(20)
+  title     String   @db.VarChar(255)
+  link      String?  @db.VarChar(500)
+  image     String   @db.VarChar(500)
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  banner   Banner   @relation(fields: [bannerId], references: [id], onDelete: Cascade)
+  language Language @relation(fields: [lang], references: [code], onDelete: Restrict, onUpdate: Cascade)
+
+  @@unique([bannerId, lang])
+  @@index([lang, title])
+  @@index([lang, isActive])
+  @@index([bannerId])
+}
+
+
