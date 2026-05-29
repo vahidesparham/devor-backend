@@ -10,8 +10,6 @@ const translationSchema = z.object({
   summary: nullableString(500),
   description: nullableText,
   address: nullableString(500),
-  seoTitle: nullableString(255),
-  seoDescription: nullableString(500),
   isActive: z.boolean().optional().default(true),
 });
 
@@ -25,17 +23,21 @@ const gallerySchema = z.object({
 const baseBodySchema = z.object({
   serviceTypeId: z.coerce.number().int().positive(),
   slug: z.string().trim().toLowerCase().min(2).max(160).regex(/^[a-z0-9-]+$/),
-  primaryImage: nullableString(500),
+  logoImage: nullableString(500),
+  coverImage: nullableString(500),
   phone: nullableString(80),
+  email: nullableString(191).refine((value) => !value || z.string().email().safeParse(value).success, 'Invalid email address'),
   website: nullableString(500),
   latitude: z.preprocess((val) => (val === '' || val === null ? null : val), z.coerce.number().min(-90).max(90).nullable().optional()),
   longitude: z.preprocess((val) => (val === '' || val === null ? null : val), z.coerce.number().min(-180).max(180).nullable().optional()),
+  economicLevel: z.enum(['LOW', 'MEDIUM', 'HIGH']).optional().default('MEDIUM'),
+  operationMode: z.enum(['INFO_ONLY', 'SHOWCASE', 'ORDERING', 'BOOKING', 'ORDERING_AND_BOOKING']).optional().default('INFO_ONLY'),
   displayOrder: z.coerce.number().int().min(0).optional().default(0),
   isActive: z.boolean().optional().default(true),
   isFeatured: z.boolean().optional().default(false),
+  showInLatest: z.boolean().optional().default(false),
   translations: z.array(translationSchema).min(1),
   gallery: z.array(gallerySchema).optional().default([]),
-  featureIds: z.array(z.coerce.number().int().positive()).optional().default([]),
   attributeOptionIds: z.array(z.coerce.number().int().positive()).optional().default([]),
 });
 

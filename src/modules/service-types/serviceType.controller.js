@@ -2,7 +2,8 @@ const { ok } = require('../../shared/http/response');
 const service = require('./serviceType.service');
 
 async function list(req, res) {
-  const result = await service.listServiceTypes(req.query);
+  const lang = req.get('x-lang') || null;
+  const result = await service.listServiceTypes(req.query, lang);
   return ok(res, { code: 'SERVICE_TYPE_LIST_SUCCESS', data: result.items, meta: result.meta });
 }
 

@@ -23,7 +23,7 @@ const corsOptions = {
 
 morgan.token("traceid", (req) => req.traceId || "-");
 
-app.set("trust proxy", true);
+app.set("trust proxy", 1);
 app.use(traceId);
 app.use(morgan(":method :url :status :response-time ms traceId=:traceid"));
 app.use(

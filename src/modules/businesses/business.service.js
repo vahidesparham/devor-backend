@@ -13,16 +13,9 @@ async function assertLanguages(codes) {
   }
 }
 
-async function assertBusinessRelations(serviceTypeId, featureIds, attributeOptionIds) {
+async function assertBusinessRelations(serviceTypeId, attributeOptionIds) {
   const serviceType = await prisma.serviceType.findUnique({ where: { id: serviceTypeId }, select: { id: true } });
   if (!serviceType) throw new AppError(400, 'VALIDATION_ERROR', 'Validation failed', { errors: [{ path: 'serviceTypeId', message: 'Service type not found' }] });
-
-  if (featureIds.length) {
-    const count = await prisma.featureDefinition.count({ where: { id: { in: featureIds }, serviceTypeId } });
-    if (count !== new Set(featureIds).size) {
-      throw new AppError(400, 'VALIDATION_ERROR', 'Validation failed', { errors: [{ path: 'featureIds', message: 'Some features do not belong to the selected service type' }] });
-    }
-  }
 
   if (attributeOptionIds.length) {
     const options = await prisma.attributeOption.findMany({
@@ -57,12 +50,15 @@ function normalize(item) {
     displayOrder: item.displayOrder,
     isActive: item.isActive,
     isFeatured: item.isFeatured,
+    showInLatest: item.showInLatest,
+    economicLevel: item.economicLevel,
+    operationMode: item.operationMode,
   };
 }
 
 function splitData(data) {
-  const { translations, gallery, featureIds, attributeOptionIds, ...core } = data;
-  return { core, translations, gallery, featureIds, attributeOptionIds };
+  const { translations, gallery, attributeOptionIds, ...core } = data;
+  return { core, translations, gallery, attributeOptionIds };
 }
 
 async function listBusinesses(query, lang) {
@@ -86,9 +82,9 @@ async function listBusinesses(query, lang) {
       take: query.pageSize,
       orderBy: [{ [query.sortBy]: query.sortDir }, { id: 'asc' }],
       include: {
-        serviceType: { select: { id: true, code: true, title: true, icon: true, color: true } },
+        serviceType: { select: { id: true, code: true, title: true, image: true, color: true } },
         translations: { where: { lang: selectedLang }, take: 1 },
-        _count: { select: { gallery: true, businessFeatures: true, businessAttributes: true } },
+        _count: { select: { gallery: true, businessAttributes: true, businessUsers: true } },
       },
     }),
     prisma.business.count({ where }),
@@ -104,32 +100,29 @@ async function getBusinessById(id) {
   const item = await prisma.business.findUnique({
     where: { id },
     include: {
-      serviceType: { select: { id: true, code: true, title: true, icon: true, color: true } },
+      serviceType: { select: { id: true, code: true, title: true, image: true, color: true } },
       translations: { orderBy: { lang: 'asc' } },
       gallery: { orderBy: [{ displayOrder: 'asc' }, { id: 'asc' }] },
-      businessFeatures: { select: { featureDefinitionId: true } },
       businessAttributes: { select: { attributeOptionId: true } },
     },
   });
   if (!item) throw new AppError(404, 'NOT_FOUND', 'Business not found');
   return {
     ...item,
-    featureIds: item.businessFeatures.map((entry) => entry.featureDefinitionId),
     attributeOptionIds: item.businessAttributes.map((entry) => entry.attributeOptionId),
   };
 }
 
 async function createBusiness(data, req) {
-  const { core, translations, gallery, featureIds, attributeOptionIds } = splitData(data);
+  const { core, translations, gallery, attributeOptionIds } = splitData(data);
   await assertLanguages([...new Set(translations.map((item) => item.lang))]);
-  await assertBusinessRelations(core.serviceTypeId, featureIds || [], attributeOptionIds || []);
+  await assertBusinessRelations(core.serviceTypeId, attributeOptionIds || []);
 
   const created = await prisma.business.create({
     data: {
       ...core,
       translations: { create: translations },
       gallery: gallery?.length ? { create: gallery.map(({ id: _id, ...item }) => item) } : undefined,
-      businessFeatures: featureIds?.length ? { create: [...new Set(featureIds)].map((featureDefinitionId) => ({ featureDefinitionId })) } : undefined,
       businessAttributes: attributeOptionIds?.length ? { create: [...new Set(attributeOptionIds)].map((attributeOptionId) => ({ attributeOptionId })) } : undefined,
     },
     include: { translations: true, gallery: true },
@@ -140,13 +133,19 @@ async function createBusiness(data, req) {
 }
 
 async function updateBusiness(id, data, req) {
-  const existing = await prisma.business.findUnique({ where: { id }, include: { translations: true } });
+  const existing = await prisma.business.findUnique({
+    where: { id },
+    include: { translations: true, businessAttributes: { select: { attributeOptionId: true } } },
+  });
   if (!existing) throw new AppError(404, 'NOT_FOUND', 'Business not found');
 
-  const { core, translations, gallery, featureIds, attributeOptionIds } = splitData(data);
+  const { core, translations, gallery, attributeOptionIds } = splitData(data);
   const nextServiceTypeId = core.serviceTypeId || existing.serviceTypeId;
   if (translations) await assertLanguages([...new Set(translations.map((item) => item.lang))]);
-  await assertBusinessRelations(nextServiceTypeId, featureIds || [], attributeOptionIds || []);
+  const nextAttributeOptionIds = Array.isArray(attributeOptionIds)
+    ? attributeOptionIds
+    : existing.businessAttributes.map((entry) => entry.attributeOptionId);
+  await assertBusinessRelations(nextServiceTypeId, nextAttributeOptionIds);
 
   const updated = await prisma.$transaction(async (tx) => {
     if (Object.keys(core).length) await tx.business.update({ where: { id }, data: core });
@@ -175,13 +174,6 @@ async function updateBusiness(id, data, req) {
         }
       }
       await tx.businessGallery.deleteMany({ where: { businessId: id, id: { notIn: keepIds } } });
-    }
-
-    if (Array.isArray(featureIds)) {
-      await tx.businessFeature.deleteMany({ where: { businessId: id } });
-      if (featureIds.length) {
-        await tx.businessFeature.createMany({ data: [...new Set(featureIds)].map((featureDefinitionId) => ({ businessId: id, featureDefinitionId })) });
-      }
     }
 
     if (Array.isArray(attributeOptionIds)) {
