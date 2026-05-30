@@ -8,6 +8,7 @@ const nullableNumber = z.preprocess((val) => (val === '' || val === null ? null 
 const translationSchema = z.object({
   lang: langCodeSchema,
   title: z.string().trim().min(1).max(180),
+  shortDescription: nullableString(320),
   description: nullableText,
   isActive: z.boolean().optional().default(true),
 });
@@ -17,6 +18,12 @@ const baseBodySchema = z.object({
   categoryId: z.preprocess((val) => (val === '' || val === null ? null : val), z.coerce.number().int().positive().nullable().optional()),
   image: nullableString(500),
   basePrice: nullableNumber,
+  oldPrice: nullableNumber,
+  preparationMinutes: z.preprocess((val) => (val === '' || val === null ? null : val), z.coerce.number().int().min(0).max(10080).nullable().optional()),
+  isFeatured: z.boolean().optional().default(false),
+  isPopular: z.boolean().optional().default(false),
+  isNew: z.boolean().optional().default(false),
+  isUnavailable: z.boolean().optional().default(false),
   displayOrder: z.coerce.number().int().min(0).optional().default(0),
   isActive: z.boolean().optional().default(true),
   translations: z.array(translationSchema).min(1),

@@ -20,8 +20,17 @@ const gallerySchema = z.object({
   displayOrder: z.coerce.number().int().min(0).optional().default(0),
 });
 
+const slideshowSchema = z.object({
+  id: z.coerce.number().int().positive().optional(),
+  image: z.string().trim().min(1).max(500),
+  displayOrder: z.coerce.number().int().min(0).optional().default(0),
+});
+
 const baseBodySchema = z.object({
   serviceTypeId: z.coerce.number().int().positive(),
+  countryId: z.preprocess((val) => (val === '' || val === null ? null : val), z.coerce.number().int().positive().nullable().optional()),
+  cityId: z.preprocess((val) => (val === '' || val === null ? null : val), z.coerce.number().int().positive().nullable().optional()),
+  areaId: z.preprocess((val) => (val === '' || val === null ? null : val), z.coerce.number().int().positive().nullable().optional()),
   slug: z.string().trim().toLowerCase().min(2).max(160).regex(/^[a-z0-9-]+$/),
   logoImage: nullableString(500),
   coverImage: nullableString(500),
@@ -38,6 +47,7 @@ const baseBodySchema = z.object({
   showInLatest: z.boolean().optional().default(false),
   translations: z.array(translationSchema).min(1),
   gallery: z.array(gallerySchema).optional().default([]),
+  slideshows: z.array(slideshowSchema).optional().default([]),
   attributeOptionIds: z.array(z.coerce.number().int().positive()).optional().default([]),
 });
 
@@ -68,6 +78,9 @@ const listBusinessesSchema = z.object({
   pageSize: z.coerce.number().int().min(1).max(100).optional().default(20),
   q: z.string().trim().max(255).optional(),
   serviceTypeId: z.coerce.number().int().positive().optional(),
+  countryId: z.coerce.number().int().positive().optional(),
+  cityId: z.coerce.number().int().positive().optional(),
+  areaId: z.coerce.number().int().positive().optional(),
   isActive: z.preprocess((val) => {
     if (val === undefined || val === '') return undefined;
     if (val === 'true') return true;

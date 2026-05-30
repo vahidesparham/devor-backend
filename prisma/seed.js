@@ -56,6 +56,10 @@ async function main() {
         "attribute_groups.create",
         "attribute_groups.update",
         "attribute_groups.delete",
+        "locations.read",
+        "locations.create",
+        "locations.update",
+        "locations.delete",
         "businesses.read",
         "businesses.create",
         "businesses.update",
@@ -197,11 +201,13 @@ async function main() {
         { code: "business_logo", width: 512, height: 512, thumbnailWidth: 128, thumbnailHeight: 128, folderName: "business-logos" },
         { code: "business_cover", width: 1200, height: 800, thumbnailWidth: 360, thumbnailHeight: 240, folderName: "business-covers" },
         { code: "business_gallery", width: 1600, height: 1000, thumbnailWidth: 400, thumbnailHeight: 250, folderName: "business-gallery" },
+        { code: "business_slideshow", width: 1600, height: 700, thumbnailWidth: 480, thumbnailHeight: 210, folderName: "business-slideshows" },
         { code: "offering_category_image", width: 800, height: 600, thumbnailWidth: 240, thumbnailHeight: 180, folderName: "offering-categories" },
         { code: "business_offering_image", width: 1000, height: 750, thumbnailWidth: 300, thumbnailHeight: 225, folderName: "business-offerings" },
         { code: "service_type_icon", width: 512, height: 512, thumbnailWidth: 128, thumbnailHeight: 128, folderName: "service-types" },
         { code: "attribute_group_icon", width: 512, height: 512, thumbnailWidth: 128, thumbnailHeight: 128, folderName: "attribute-groups" },
         { code: "attribute_option_image", width: 512, height: 512, thumbnailWidth: 128, thumbnailHeight: 128, folderName: "attribute-options" },
+        { code: "country_flag", width: 512, height: 512, thumbnailWidth: 128, thumbnailHeight: 128, folderName: "country-flags" },
         { code: "banner", width: 1440, height: 480, thumbnailWidth: 480, thumbnailHeight: 160, folderName: "banners" },
         { code: "slideshow", width: 1600, height: 700, thumbnailWidth: 480, thumbnailHeight: 210, folderName: "slideshows" },
     ];
@@ -210,6 +216,43 @@ async function main() {
 
     for (const config of marketplaceImageConfigs) {
         await createIfMissing(prisma.imageConfig, { code: config.code }, config);
+    }
+
+    const iran = await prisma.country.upsert({
+        where: { code: "IR" },
+        update: { phoneCode: "+98", displayOrder: 10, isActive: true },
+        create: { code: "IR", title: "Iran", phoneCode: "+98", displayOrder: 10, isActive: true },
+    });
+    const iranTranslations = {
+        en: "Iran",
+        fa: "ایران",
+        ar: "إيران",
+        de: "Iran",
+    };
+    for (const [lang, title] of Object.entries(iranTranslations)) {
+        await prisma.countryTranslation.upsert({
+            where: { countryId_lang: { countryId: iran.id, lang } },
+            update: { title, isActive: true },
+            create: { countryId: iran.id, lang, title, isActive: true },
+        });
+    }
+    const tehran = await prisma.city.upsert({
+        where: { countryId_code: { countryId: iran.id, code: "tehran" } },
+        update: { title: "Tehran", displayOrder: 10, isActive: true },
+        create: { countryId: iran.id, code: "tehran", title: "Tehran", displayOrder: 10, isActive: true },
+    });
+    const tehranTranslations = {
+        en: "Tehran",
+        fa: "تهران",
+        ar: "طهران",
+        de: "Teheran",
+    };
+    for (const [lang, title] of Object.entries(tehranTranslations)) {
+        await prisma.cityTranslation.upsert({
+            where: { cityId_lang: { cityId: tehran.id, lang } },
+            update: { title, isActive: true },
+            create: { cityId: tehran.id, lang, title, isActive: true },
+        });
     }
 
     const serviceTypes = [

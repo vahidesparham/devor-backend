@@ -31,12 +31,31 @@ function chooseTitle(translations, fallback = '') {
 }
 
 function normalize(item) {
-  return { id: item.id, businessId: item.businessId, categoryId: item.categoryId, title: item.title, image: item.image, basePrice: item.basePrice === null || item.basePrice === undefined ? null : Number(item.basePrice), displayOrder: item.displayOrder, isActive: item.isActive };
+  return {
+    id: item.id,
+    businessId: item.businessId,
+    categoryId: item.categoryId,
+    title: item.title,
+    image: item.image,
+    basePrice: item.basePrice === null || item.basePrice === undefined ? null : Number(item.basePrice),
+    oldPrice: item.oldPrice === null || item.oldPrice === undefined ? null : Number(item.oldPrice),
+    preparationMinutes: item.preparationMinutes,
+    isFeatured: item.isFeatured,
+    isPopular: item.isPopular,
+    isNew: item.isNew,
+    isUnavailable: item.isUnavailable,
+    displayOrder: item.displayOrder,
+    isActive: item.isActive,
+  };
 }
 
 function mapDecimal(item) {
   if (!item) return item;
-  return { ...item, basePrice: item.basePrice === null || item.basePrice === undefined ? null : Number(item.basePrice) };
+  return {
+    ...item,
+    basePrice: item.basePrice === null || item.basePrice === undefined ? null : Number(item.basePrice),
+    oldPrice: item.oldPrice === null || item.oldPrice === undefined ? null : Number(item.oldPrice),
+  };
 }
 
 async function listBusinessOfferings(query) {
@@ -97,7 +116,22 @@ async function createBusinessOffering(data, req) {
   await assertCategory(data.categoryId, data.businessId);
   await assertLanguages([...new Set(data.translations.map((item) => item.lang))]);
   const created = await prisma.businessOffering.create({
-    data: { businessId: data.businessId, categoryId: data.categoryId ?? null, title: chooseTitle(data.translations), image: data.image ?? null, basePrice: data.basePrice ?? null, displayOrder: data.displayOrder ?? 0, isActive: data.isActive ?? true, translations: { create: data.translations } },
+    data: {
+      businessId: data.businessId,
+      categoryId: data.categoryId ?? null,
+      title: chooseTitle(data.translations),
+      image: data.image ?? null,
+      basePrice: data.basePrice ?? null,
+      oldPrice: data.oldPrice ?? null,
+      preparationMinutes: data.preparationMinutes ?? null,
+      isFeatured: data.isFeatured ?? false,
+      isPopular: data.isPopular ?? false,
+      isNew: data.isNew ?? false,
+      isUnavailable: data.isUnavailable ?? false,
+      displayOrder: data.displayOrder ?? 0,
+      isActive: data.isActive ?? true,
+      translations: { create: data.translations },
+    },
     include: { translations: true },
   });
   await audit(req, { action: 'CREATE', entity: 'BusinessOffering', entityId: created.id, after: normalize(created) });
@@ -114,7 +148,7 @@ async function updateBusinessOffering(id, data, req) {
 
   const updated = await prisma.$transaction(async (tx) => {
     const updateData = {};
-    ['businessId', 'categoryId', 'image', 'basePrice', 'displayOrder', 'isActive'].forEach((field) => { if (data[field] !== undefined) updateData[field] = data[field]; });
+    ['businessId', 'categoryId', 'image', 'basePrice', 'oldPrice', 'preparationMinutes', 'isFeatured', 'isPopular', 'isNew', 'isUnavailable', 'displayOrder', 'isActive'].forEach((field) => { if (data[field] !== undefined) updateData[field] = data[field]; });
     if (data.translations) updateData.title = chooseTitle(data.translations, existing.title);
     if (Object.keys(updateData).length) await tx.businessOffering.update({ where: { id }, data: updateData });
     if (Array.isArray(data.translations)) {

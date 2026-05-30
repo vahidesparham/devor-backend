@@ -83,15 +83,15 @@ model AdminUser {
 }
 
 model Role {
-  id             Int              @id @default(autoincrement())
-  name           String           @unique @db.VarChar(191)
-  title          String?          @db.VarChar(120)
-  icon           String?          @db.VarChar(120)
-  color          String?          @db.VarChar(30)
-  description    String?          @db.VarChar(255)
-  createdAt      DateTime         @default(now())
-  updatedAt      DateTime         @updatedAt
-  adminUserRoles AdminUserRole[]
+  id              Int              @id @default(autoincrement())
+  name            String           @unique @db.VarChar(191)
+  title           String?          @db.VarChar(120)
+  icon            String?          @db.VarChar(120)
+  color           String?          @db.VarChar(30)
+  description     String?          @db.VarChar(255)
+  createdAt       DateTime         @default(now())
+  updatedAt       DateTime         @updatedAt
+  adminUserRoles  AdminUserRole[]
   rolePermissions RolePermission[]
 }
 
@@ -126,16 +126,16 @@ model RolePermission {
 }
 
 model RefreshToken {
-  id                 Int       @id @default(autoincrement())
-  adminId            Int
-  tokenHash          String    @unique @db.VarChar(191)
-  expiresAt          DateTime?
-  revokedAt          DateTime?
-  revokedReason      String?   @db.VarChar(255)
-  replacedByTokenHash String?  @db.VarChar(191)
-  createdByIp        String?   @db.VarChar(100)
-  userAgent          String?   @db.VarChar(255)
-  createdAt          DateTime  @default(now())
+  id                  Int       @id @default(autoincrement())
+  adminId             Int
+  tokenHash           String    @unique @db.VarChar(191)
+  expiresAt           DateTime?
+  revokedAt           DateTime?
+  revokedReason       String?   @db.VarChar(255)
+  replacedByTokenHash String?   @db.VarChar(191)
+  createdByIp         String?   @db.VarChar(100)
+  userAgent           String?   @db.VarChar(255)
+  createdAt           DateTime  @default(now())
 
   admin AdminUser @relation(fields: [adminId], references: [id], onDelete: Cascade)
 
@@ -143,25 +143,28 @@ model RefreshToken {
 }
 
 model Language {
-  id                    Int                    @id @default(autoincrement())
-  code                  String                 @unique @db.VarChar(20)
-  name                  String                 @db.VarChar(100)
-  nativeName            String?                @db.VarChar(100)
-  direction             TextDirection          @default(LTR)
-  isActive              Boolean                @default(true)
-  isDefault             Boolean                @default(false)
-  createdAt             DateTime               @default(now())
-  updatedAt             DateTime               @updatedAt
-  slideshowTranslations SlideshowTranslation[]
-  bannerTranslations    BannerTranslation[]
-  businessTranslations  BusinessTranslation[]
-  serviceTypeTranslations ServiceTypeTranslation[]
-  attributeGroupTranslations AttributeGroupTranslation[]
-  attributeOptionTranslations AttributeOptionTranslation[]
-  businessOfferingCategoryTranslations BusinessOfferingCategoryTranslation[]
-  businessOfferingTranslations BusinessOfferingTranslation[]
+  id                                      Int                                      @id @default(autoincrement())
+  code                                    String                                   @unique @db.VarChar(20)
+  name                                    String                                   @db.VarChar(100)
+  nativeName                              String?                                  @db.VarChar(100)
+  direction                               TextDirection                            @default(LTR)
+  isActive                                Boolean                                  @default(true)
+  isDefault                               Boolean                                  @default(false)
+  createdAt                               DateTime                                 @default(now())
+  updatedAt                               DateTime                                 @updatedAt
+  slideshowTranslations                   SlideshowTranslation[]
+  bannerTranslations                      BannerTranslation[]
+  businessTranslations                    BusinessTranslation[]
+  serviceTypeTranslations                 ServiceTypeTranslation[]
+  attributeGroupTranslations              AttributeGroupTranslation[]
+  attributeOptionTranslations             AttributeOptionTranslation[]
+  businessOfferingCategoryTranslations    BusinessOfferingCategoryTranslation[]
+  businessOfferingTranslations            BusinessOfferingTranslation[]
   businessOfferingOptionGroupTranslations BusinessOfferingOptionGroupTranslation[]
-  businessOfferingOptionTranslations BusinessOfferingOptionTranslation[]
+  businessOfferingOptionTranslations      BusinessOfferingOptionTranslation[]
+  countryTranslations                     CountryTranslation[]
+  cityTranslations                        CityTranslation[]
+  areaTranslations                        AreaTranslation[]
 
   @@index([isActive])
 }
@@ -202,19 +205,19 @@ model AuditLog {
 }
 
 model ErrorLog {
-  id         BigInt    @id @default(autoincrement())
-  createdAt  DateTime  @default(now())
-  traceId    String?   @db.VarChar(100)
+  id         BigInt   @id @default(autoincrement())
+  createdAt  DateTime @default(now())
+  traceId    String?  @db.VarChar(100)
   adminId    Int?
-  method     String    @db.VarChar(10)
-  path       String    @db.VarChar(255)
+  method     String   @db.VarChar(10)
+  path       String   @db.VarChar(255)
   query      Json?
-  ip         String?   @db.VarChar(100)
-  userAgent  String?   @db.VarChar(255)
+  ip         String?  @db.VarChar(100)
+  userAgent  String?  @db.VarChar(255)
   statusCode Int
-  code       String    @db.VarChar(120)
-  message    String    @db.VarChar(500)
-  stack      String?   @db.Text
+  code       String   @db.VarChar(120)
+  message    String   @db.VarChar(500)
+  stack      String?  @db.Text
   details    Json?
   durationMs Float?
 
@@ -225,13 +228,12 @@ model ErrorLog {
   @@index([statusCode, code])
 }
 
-
 model Slideshow {
-  id           Int                   @id @default(autoincrement())
+  id           Int                    @id @default(autoincrement())
   fromDate     DateTime?
   toDate       DateTime?
-  createdAt    DateTime              @default(now())
-  updatedAt    DateTime              @updatedAt
+  createdAt    DateTime               @default(now())
+  updatedAt    DateTime               @updatedAt
   translations SlideshowTranslation[]
 
   @@index([fromDate])
@@ -240,15 +242,15 @@ model Slideshow {
 }
 
 model SlideshowTranslation {
-  id          Int       @id @default(autoincrement())
+  id          Int      @id @default(autoincrement())
   slideshowId Int
-  lang        String    @db.VarChar(20)
-  title       String    @db.VarChar(255)
-  link        String?   @db.VarChar(500)
-  image       String    @db.VarChar(500)
-  isActive    Boolean   @default(true)
-  createdAt   DateTime  @default(now())
-  updatedAt   DateTime  @updatedAt
+  lang        String   @db.VarChar(20)
+  title       String   @db.VarChar(255)
+  link        String?  @db.VarChar(500)
+  image       String   @db.VarChar(500)
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
 
   slideshow Slideshow @relation(fields: [slideshowId], references: [id], onDelete: Cascade)
   language  Language  @relation(fields: [lang], references: [code], onDelete: Restrict, onUpdate: Cascade)
@@ -260,12 +262,12 @@ model SlideshowTranslation {
 }
 
 model Banner {
-  id           Int                @id @default(autoincrement())
+  id           Int                 @id @default(autoincrement())
   placement    BannerPlacement
   fromDate     DateTime?
   toDate       DateTime?
-  createdAt    DateTime           @default(now())
-  updatedAt    DateTime           @updatedAt
+  createdAt    DateTime            @default(now())
+  updatedAt    DateTime            @updatedAt
   translations BannerTranslation[]
 
   @@index([placement])
@@ -295,19 +297,19 @@ model BannerTranslation {
 }
 
 model ServiceType {
-  id                 Int                 @id @default(autoincrement())
-  code               String              @unique @db.VarChar(80)
-  title              String              @db.VarChar(160)
-  image              String?             @db.VarChar(500)
-  color              String?             @db.VarChar(30)
-  description        String?             @db.VarChar(500)
-  displayOrder       Int                 @default(0)
-  isActive           Boolean             @default(true)
-  createdAt          DateTime            @default(now())
-  updatedAt          DateTime            @updatedAt
-  translations       ServiceTypeTranslation[]
-  attributeGroups    AttributeGroup[]
-  businesses         Business[]
+  id              Int                      @id @default(autoincrement())
+  code            String                   @unique @db.VarChar(80)
+  title           String                   @db.VarChar(160)
+  image           String?                  @db.VarChar(500)
+  color           String?                  @db.VarChar(30)
+  description     String?                  @db.VarChar(500)
+  displayOrder    Int                      @default(0)
+  isActive        Boolean                  @default(true)
+  createdAt       DateTime                 @default(now())
+  updatedAt       DateTime                 @updatedAt
+  translations    ServiceTypeTranslation[]
+  attributeGroups AttributeGroup[]
+  businesses      Business[]
 
   @@index([isActive, displayOrder])
 }
@@ -330,17 +332,17 @@ model ServiceTypeTranslation {
 }
 
 model AttributeGroup {
-  id            Int                    @id @default(autoincrement())
+  id            Int                         @id @default(autoincrement())
   serviceTypeId Int
-  code          String                 @db.VarChar(120)
-  title         String                 @db.VarChar(160)
-  image         String?                @db.VarChar(500)
-  selectionMode AttributeSelectionMode @default(MULTIPLE)
-  displayOrder  Int                    @default(0)
-  isActive      Boolean                @default(true)
-  createdAt     DateTime               @default(now())
-  updatedAt     DateTime               @updatedAt
-  serviceType   ServiceType            @relation(fields: [serviceTypeId], references: [id], onDelete: Cascade)
+  code          String                      @db.VarChar(120)
+  title         String                      @db.VarChar(160)
+  image         String?                     @db.VarChar(500)
+  selectionMode AttributeSelectionMode      @default(MULTIPLE)
+  displayOrder  Int                         @default(0)
+  isActive      Boolean                     @default(true)
+  createdAt     DateTime                    @default(now())
+  updatedAt     DateTime                    @updatedAt
+  serviceType   ServiceType                 @relation(fields: [serviceTypeId], references: [id], onDelete: Cascade)
   translations  AttributeGroupTranslation[]
   options       AttributeOption[]
 
@@ -365,17 +367,17 @@ model AttributeGroupTranslation {
 }
 
 model AttributeOption {
-  id                 Int                 @id @default(autoincrement())
+  id                 Int                          @id @default(autoincrement())
   groupId            Int
-  key                String              @db.VarChar(120)
-  title              String              @db.VarChar(160)
-  image              String?             @db.VarChar(500)
-  color              String?             @db.VarChar(30)
-  displayOrder       Int                 @default(0)
-  isActive           Boolean             @default(true)
-  createdAt          DateTime            @default(now())
-  updatedAt          DateTime            @updatedAt
-  group              AttributeGroup      @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  key                String                       @db.VarChar(120)
+  title              String                       @db.VarChar(160)
+  image              String?                      @db.VarChar(500)
+  color              String?                      @db.VarChar(30)
+  displayOrder       Int                          @default(0)
+  isActive           Boolean                      @default(true)
+  createdAt          DateTime                     @default(now())
+  updatedAt          DateTime                     @updatedAt
+  group              AttributeGroup               @relation(fields: [groupId], references: [id], onDelete: Cascade)
   translations       AttributeOptionTranslation[]
   businessAttributes BusinessAttribute[]
 
@@ -399,53 +401,163 @@ model AttributeOptionTranslation {
   @@index([lang, isActive])
 }
 
+model Country {
+  id           Int                  @id @default(autoincrement())
+  code         String               @unique @db.VarChar(10)
+  title        String               @db.VarChar(160)
+  phoneCode    String               @db.VarChar(20)
+  flagImage    String?              @db.VarChar(500)
+  displayOrder Int                  @default(0)
+  isActive     Boolean              @default(true)
+  createdAt    DateTime             @default(now())
+  updatedAt    DateTime             @updatedAt
+  translations CountryTranslation[]
+  cities       City[]
+  businesses   Business[]
+
+  @@index([isActive, displayOrder])
+}
+
+model CountryTranslation {
+  id        Int      @id @default(autoincrement())
+  countryId Int
+  lang      String   @db.VarChar(20)
+  title     String   @db.VarChar(160)
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  country   Country  @relation(fields: [countryId], references: [id], onDelete: Cascade)
+  language  Language @relation(fields: [lang], references: [code], onDelete: Restrict, onUpdate: Cascade)
+
+  @@unique([countryId, lang])
+  @@index([lang, title])
+  @@index([lang, isActive])
+}
+
+model City {
+  id           Int               @id @default(autoincrement())
+  countryId    Int
+  code         String            @db.VarChar(120)
+  title        String            @db.VarChar(160)
+  displayOrder Int               @default(0)
+  isActive     Boolean           @default(true)
+  createdAt    DateTime          @default(now())
+  updatedAt    DateTime          @updatedAt
+  country      Country           @relation(fields: [countryId], references: [id], onDelete: Cascade)
+  translations CityTranslation[]
+  areas        Area[]
+  businesses   Business[]
+
+  @@unique([countryId, code])
+  @@index([countryId, isActive, displayOrder])
+}
+
+model CityTranslation {
+  id        Int      @id @default(autoincrement())
+  cityId    Int
+  lang      String   @db.VarChar(20)
+  title     String   @db.VarChar(160)
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  city      City     @relation(fields: [cityId], references: [id], onDelete: Cascade)
+  language  Language @relation(fields: [lang], references: [code], onDelete: Restrict, onUpdate: Cascade)
+
+  @@unique([cityId, lang])
+  @@index([lang, title])
+  @@index([lang, isActive])
+}
+
+model Area {
+  id           Int               @id @default(autoincrement())
+  cityId       Int
+  code         String            @db.VarChar(120)
+  title        String            @db.VarChar(160)
+  displayOrder Int               @default(0)
+  isActive     Boolean           @default(true)
+  createdAt    DateTime          @default(now())
+  updatedAt    DateTime          @updatedAt
+  city         City              @relation(fields: [cityId], references: [id], onDelete: Cascade)
+  translations AreaTranslation[]
+  businesses   Business[]
+
+  @@unique([cityId, code])
+  @@index([cityId, isActive, displayOrder])
+}
+
+model AreaTranslation {
+  id        Int      @id @default(autoincrement())
+  areaId    Int
+  lang      String   @db.VarChar(20)
+  title     String   @db.VarChar(160)
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  area      Area     @relation(fields: [areaId], references: [id], onDelete: Cascade)
+  language  Language @relation(fields: [lang], references: [code], onDelete: Restrict, onUpdate: Cascade)
+
+  @@unique([areaId, lang])
+  @@index([lang, title])
+  @@index([lang, isActive])
+}
+
 model Business {
-  id                 Int                   @id @default(autoincrement())
-  serviceTypeId      Int
-  slug               String                @unique @db.VarChar(160)
-  logoImage          String?               @db.VarChar(500)
-  coverImage         String?               @db.VarChar(500)
-  phone              String?               @db.VarChar(80)
-  email              String?               @db.VarChar(191)
-  website            String?               @db.VarChar(500)
-  latitude           Decimal?              @db.Decimal(10, 7)
-  longitude          Decimal?              @db.Decimal(10, 7)
-  economicLevel      BusinessEconomicLevel @default(MEDIUM)
-  operationMode      BusinessOperationMode @default(INFO_ONLY)
-  displayOrder       Int                   @default(0)
-  isActive           Boolean               @default(true)
-  isFeatured         Boolean               @default(false)
-  showInLatest       Boolean               @default(false)
-  createdAt          DateTime              @default(now())
-  updatedAt          DateTime              @updatedAt
-  serviceType        ServiceType           @relation(fields: [serviceTypeId], references: [id], onDelete: Restrict)
-  translations       BusinessTranslation[]
-  gallery            BusinessGallery[]
-  workingHours       BusinessWorkingHour[]
-  businessAttributes BusinessAttribute[]
-  businessUsers      BusinessUser[]
-  offeringCategories BusinessOfferingCategory[]
-  offerings          BusinessOffering[]
+  id                  Int                        @id @default(autoincrement())
+  serviceTypeId       Int
+  countryId           Int?
+  cityId              Int?
+  areaId              Int?
+  slug                String                     @unique @db.VarChar(160)
+  logoImage           String?                    @db.VarChar(500)
+  coverImage          String?                    @db.VarChar(500)
+  phone               String?                    @db.VarChar(80)
+  email               String?                    @db.VarChar(191)
+  website             String?                    @db.VarChar(500)
+  latitude            Decimal?                   @db.Decimal(10, 7)
+  longitude           Decimal?                   @db.Decimal(10, 7)
+  economicLevel       BusinessEconomicLevel      @default(MEDIUM)
+  operationMode       BusinessOperationMode      @default(INFO_ONLY)
+  displayOrder        Int                        @default(0)
+  isActive            Boolean                    @default(true)
+  isFeatured          Boolean                    @default(false)
+  showInLatest        Boolean                    @default(false)
+  createdAt           DateTime                   @default(now())
+  updatedAt           DateTime                   @updatedAt
+  serviceType         ServiceType                @relation(fields: [serviceTypeId], references: [id], onDelete: Restrict)
+  country             Country?                   @relation(fields: [countryId], references: [id], onDelete: SetNull)
+  city                City?                      @relation(fields: [cityId], references: [id], onDelete: SetNull)
+  area                Area?                      @relation(fields: [areaId], references: [id], onDelete: SetNull)
+  translations        BusinessTranslation[]
+  gallery             BusinessGallery[]
+  slideshows          BusinessSlideshow[]
+  workingHours        BusinessWorkingHour[]
+  businessAttributes  BusinessAttribute[]
+  businessMemberships BusinessMembership[]
+  offeringCategories  BusinessOfferingCategory[]
+  offerings           BusinessOffering[]
 
   @@index([serviceTypeId, isActive, displayOrder])
+  @@index([countryId])
+  @@index([cityId])
+  @@index([areaId])
   @@index([isFeatured])
   @@index([showInLatest])
   @@index([operationMode])
 }
 
 model BusinessTranslation {
-  id             Int      @id @default(autoincrement())
-  businessId     Int
-  lang           String   @db.VarChar(20)
-  title          String   @db.VarChar(255)
-  summary        String?  @db.VarChar(500)
-  description    String?  @db.Text
-  address        String?  @db.VarChar(500)
-  isActive       Boolean  @default(true)
-  createdAt      DateTime @default(now())
-  updatedAt      DateTime @updatedAt
-  business       Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
-  language       Language @relation(fields: [lang], references: [code], onDelete: Restrict, onUpdate: Cascade)
+  id          Int      @id @default(autoincrement())
+  businessId  Int
+  lang        String   @db.VarChar(20)
+  title       String   @db.VarChar(255)
+  summary     String?  @db.VarChar(500)
+  description String?  @db.Text
+  address     String?  @db.VarChar(500)
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  business    Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  language    Language @relation(fields: [lang], references: [code], onDelete: Restrict, onUpdate: Cascade)
 
   @@unique([businessId, lang])
   @@index([lang, title])
@@ -457,6 +569,18 @@ model BusinessGallery {
   businessId   Int
   image        String   @db.VarChar(500)
   alt          String?  @db.VarChar(255)
+  displayOrder Int      @default(0)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+  business     Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+
+  @@index([businessId, displayOrder])
+}
+
+model BusinessSlideshow {
+  id           Int      @id @default(autoincrement())
+  businessId   Int
+  image        String   @db.VarChar(500)
   displayOrder Int      @default(0)
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
@@ -531,6 +655,12 @@ model BusinessOffering {
   title        String                        @db.VarChar(180)
   image        String?                       @db.VarChar(500)
   basePrice    Decimal?                      @db.Decimal(12, 2)
+  oldPrice     Decimal?                      @db.Decimal(12, 2)
+  preparationMinutes Int?
+  isFeatured   Boolean                       @default(false)
+  isPopular    Boolean                       @default(false)
+  isNew        Boolean                       @default(false)
+  isUnavailable Boolean                      @default(false)
   displayOrder Int                           @default(0)
   isActive     Boolean                       @default(true)
   createdAt    DateTime                      @default(now())
@@ -542,6 +672,9 @@ model BusinessOffering {
 
   @@index([businessId, isActive, displayOrder])
   @@index([categoryId])
+  @@index([isFeatured])
+  @@index([isPopular])
+  @@index([isNew])
 }
 
 model BusinessOfferingTranslation {
@@ -549,6 +682,7 @@ model BusinessOfferingTranslation {
   offeringId  Int
   lang        String           @db.VarChar(20)
   title       String           @db.VarChar(180)
+  shortDescription String?     @db.VarChar(320)
   description String?          @db.Text
   isActive    Boolean          @default(true)
   createdAt   DateTime         @default(now())
@@ -597,15 +731,15 @@ model BusinessOfferingOptionGroupTranslation {
 }
 
 model BusinessOfferingOption {
-  id           Int                                  @id @default(autoincrement())
+  id           Int                                 @id @default(autoincrement())
   groupId      Int
-  title        String                               @db.VarChar(160)
-  priceDelta   Decimal?                             @db.Decimal(12, 2)
-  displayOrder Int                                  @default(0)
-  isActive     Boolean                              @default(true)
-  createdAt    DateTime                             @default(now())
-  updatedAt    DateTime                             @updatedAt
-  group        BusinessOfferingOptionGroup          @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  title        String                              @db.VarChar(160)
+  priceDelta   Decimal?                            @db.Decimal(12, 2)
+  displayOrder Int                                 @default(0)
+  isActive     Boolean                             @default(true)
+  createdAt    DateTime                            @default(now())
+  updatedAt    DateTime                            @updatedAt
+  group        BusinessOfferingOptionGroup         @relation(fields: [groupId], references: [id], onDelete: Cascade)
   translations BusinessOfferingOptionTranslation[]
 
   @@index([groupId, isActive, displayOrder])
@@ -628,23 +762,35 @@ model BusinessOfferingOptionTranslation {
 }
 
 model BusinessUser {
-  id           Int              @id @default(autoincrement())
-  businessId   Int
-  email        String           @db.VarChar(191)
-  phone        String?          @db.VarChar(80)
-  passwordHash String           @db.VarChar(255)
-  firstName    String?          @db.VarChar(100)
-  lastName     String?          @db.VarChar(100)
-  role         BusinessUserRole @default(STAFF)
-  isActive     Boolean          @default(true)
-  createdAt    DateTime         @default(now())
-  updatedAt    DateTime         @updatedAt
-  business     Business         @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  id           Int                  @id @default(autoincrement())
+  email        String               @unique @db.VarChar(191)
+  phone        String?              @db.VarChar(80)
+  passwordHash String               @db.VarChar(255)
+  firstName    String?              @db.VarChar(100)
+  lastName     String?              @db.VarChar(100)
+  isActive     Boolean              @default(true)
+  createdAt    DateTime             @default(now())
+  updatedAt    DateTime             @updatedAt
+  memberships  BusinessMembership[]
 
-  @@unique([businessId, email])
-  @@index([businessId, role])
   @@index([email])
+  @@index([phone])
   @@index([isActive])
 }
 
+model BusinessMembership {
+  id         Int              @id @default(autoincrement())
+  businessId Int
+  userId     Int
+  role       BusinessUserRole @default(STAFF)
+  isActive   Boolean          @default(true)
+  createdAt  DateTime         @default(now())
+  updatedAt  DateTime         @updatedAt
+  business   Business         @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  user       BusinessUser     @relation(fields: [userId], references: [id], onDelete: Cascade)
 
+  @@unique([businessId, userId])
+  @@index([businessId, role])
+  @@index([userId, role])
+  @@index([isActive])
+}
