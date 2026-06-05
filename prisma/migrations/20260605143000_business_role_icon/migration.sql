@@ -1,0 +1,1 @@
+ALTER TABLE `BusinessRole` ADD COLUMN `icon` VARCHAR(120) NULL;

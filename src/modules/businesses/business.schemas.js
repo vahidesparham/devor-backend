@@ -3,6 +3,7 @@ const { z } = require('zod');
 const langCodeSchema = z.string().trim().toLowerCase().min(2).max(20).regex(/^[a-z0-9-]+$/);
 const nullableString = (max) => z.preprocess((val) => (val === '' ? null : val), z.string().trim().max(max).nullable().optional());
 const nullableText = z.preprocess((val) => (val === '' ? null : val), z.string().trim().nullable().optional());
+const publicationStatusSchema = z.enum(['DRAFT', 'PENDING_REVIEW', 'PUBLISHED', 'REJECTED', 'SUSPENDED']);
 
 const translationSchema = z.object({
   lang: langCodeSchema,
@@ -24,6 +25,13 @@ const slideshowSchema = z.object({
   id: z.coerce.number().int().positive().optional(),
   image: z.string().trim().min(1).max(500),
   displayOrder: z.coerce.number().int().min(0).optional().default(0),
+});
+
+const attributeValueSchema = z.object({
+  groupId: z.coerce.number().int().positive(),
+  textValue: nullableText,
+  numberValue: z.preprocess((val) => (val === '' || val === null ? null : val), z.coerce.number().nullable().optional()),
+  booleanValue: z.preprocess((val) => (val === '' || val === null ? null : val), z.boolean().nullable().optional()),
 });
 
 const baseBodySchema = z.object({
@@ -49,6 +57,7 @@ const baseBodySchema = z.object({
   gallery: z.array(gallerySchema).optional().default([]),
   slideshows: z.array(slideshowSchema).optional().default([]),
   attributeOptionIds: z.array(z.coerce.number().int().positive()).optional().default([]),
+  attributeValues: z.array(attributeValueSchema).optional().default([]),
 });
 
 function refineBusiness(data, ctx) {
@@ -93,15 +102,20 @@ const listBusinessesSchema = z.object({
     if (val === 'false') return false;
     return val;
   }, z.boolean()).optional(),
-  sortBy: z.enum(['id', 'slug', 'displayOrder', 'createdAt', 'updatedAt']).optional().default('displayOrder'),
+  publicationStatus: publicationStatusSchema.optional(),
+  sortBy: z.enum(['id', 'slug', 'title', 'serviceType', 'displayOrder', 'createdAt', 'updatedAt']).optional().default('displayOrder'),
   sortDir: z.enum(['asc', 'desc']).optional().default('asc'),
 });
 
 const idParamSchema = z.object({ id: z.coerce.number().int().positive() });
+const reviewActionSchema = z.object({
+  reviewNote: nullableString(500),
+});
 
 module.exports = {
   createBusinessSchema,
   updateBusinessSchema,
   listBusinessesSchema,
   idParamSchema,
+  reviewActionSchema,
 };

@@ -1,0 +1,6 @@
+UPDATE `AttributeGroup`
+SET `fieldType` = 'MULTI_SELECT'
+WHERE `fieldType` = 'OPTION';
+
+ALTER TABLE `AttributeGroup`
+  MODIFY COLUMN `fieldType` ENUM('TEXT', 'NUMBER', 'BOOLEAN', 'SELECT', 'MULTI_SELECT') NOT NULL DEFAULT 'MULTI_SELECT';

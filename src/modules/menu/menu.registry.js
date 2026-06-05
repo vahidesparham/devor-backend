@@ -68,6 +68,14 @@
                 order: 15,
                 permission: "banners.read",
             },
+            {
+                key: "onboardingPages",
+                title: "آن‌بوردینگ",
+                route: "/onboarding-pages",
+                icon: "hgi-smart-phone-01",
+                order: 20,
+                permission: "onboarding_pages.read",
+            },
         ],
     },
     {
@@ -107,6 +115,14 @@
                 icon: "hgi-user-group",
                 order: 40,
                 permission: "business_users.read",
+            },
+            {
+                key: "businessRoles",
+                title: "نقش‌های کسب‌وکار",
+                route: "/business-roles",
+                icon: "hgi-shield-key",
+                order: 50,
+                permission: "business_roles.read",
             },
         ],
     },
@@ -178,6 +194,7 @@
                 route: "/panel-settings",
                 icon: "hgi-preference-horizontal",
                 order: 5,
+                permission: "panel_settings.read",
             },
             {
                 key: "imageConfigs",

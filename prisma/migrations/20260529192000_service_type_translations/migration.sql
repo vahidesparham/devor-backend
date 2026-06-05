@@ -1,5 +1,5 @@
 -- AlterTable
-ALTER TABLE `servicetype` ADD COLUMN `image` VARCHAR(500) NULL;
+ALTER TABLE `ServiceType` ADD COLUMN `image` VARCHAR(500) NULL;
 
 -- CreateTable
 CREATE TABLE `ServiceTypeTranslation` (

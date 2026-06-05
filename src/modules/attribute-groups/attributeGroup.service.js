@@ -8,7 +8,10 @@ function normalize(item) {
     code: item.code,
     title: item.title,
     image: item.image,
+    fieldType: item.fieldType,
     selectionMode: item.selectionMode,
+    unit: item.unit,
+    isRequired: item.isRequired,
     displayOrder: item.displayOrder,
     isActive: item.isActive,
   };
@@ -227,11 +230,11 @@ async function updateAttributeGroup(id, data, req) {
 async function deleteAttributeGroup(id, req) {
   const existing = await prisma.attributeGroup.findUnique({
     where: { id },
-    include: { options: { include: { _count: { select: { businessAttributes: true } } } } },
+    include: { options: { include: { _count: { select: { businessAttributes: true } } } }, _count: { select: { values: true } } },
   });
   if (!existing) throw new AppError(404, 'NOT_FOUND', 'Attribute group not found');
-  if (existing.options.some((option) => option._count.businessAttributes > 0)) {
-    throw new AppError(409, 'ATTRIBUTE_GROUP_IN_USE', 'Attribute group has options used by businesses and cannot be deleted');
+  if (existing.options.some((option) => option._count.businessAttributes > 0) || existing._count.values > 0) {
+    throw new AppError(409, 'ATTRIBUTE_GROUP_IN_USE', 'Attribute group has values used by businesses and cannot be deleted');
   }
   await prisma.attributeGroup.delete({ where: { id } });
   await audit(req, { action: 'DELETE', entity: 'AttributeGroup', entityId: id, before: normalize(existing) });

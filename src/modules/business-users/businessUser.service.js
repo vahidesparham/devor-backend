@@ -2,13 +2,14 @@ const bcrypt = require('bcryptjs');
 const prisma = require('../../prisma');
 const { AppError } = require('../../shared/http/response');
 const { audit } = require('../../shared/audit/audit');
+const { assertRoleBelongsToBusiness, getDefaultBusinessRole } = require('../business-roles/businessRole.service');
 
 function normalizeMembership(item) {
   return {
     id: item.id,
     businessId: item.businessId,
     userId: item.userId,
-    role: item.role,
+    roleId: item.roleId,
     isActive: item.isActive,
   };
 }
@@ -18,6 +19,7 @@ function normalizeUser(item) {
     id: item.id,
     email: item.email,
     phone: item.phone,
+    avatar: item.avatar,
     firstName: item.firstName,
     lastName: item.lastName,
     isActive: item.isActive,
@@ -32,9 +34,13 @@ function mapBusinessUserMembership(item) {
     userId: item.userId,
     email: user.email,
     phone: user.phone,
+    avatar: user.avatar,
     firstName: user.firstName,
     lastName: user.lastName,
-    role: item.role,
+    roleId: item.roleId,
+    role: item.role || undefined,
+    roleTitle: item.role?.title || undefined,
+    roleCode: item.role?.code || undefined,
     isActive: item.isActive,
     accountIsActive: user.isActive,
     business: item.business || undefined,
@@ -77,7 +83,8 @@ function accountInclude() {
     memberships: {
       orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
       include: {
-        user: { select: { id: true, email: true, phone: true, firstName: true, lastName: true, isActive: true, createdAt: true, updatedAt: true } },
+        user: { select: { id: true, email: true, phone: true, avatar: true, firstName: true, lastName: true, isActive: true, createdAt: true, updatedAt: true } },
+        role: { select: { id: true, code: true, title: true, color: true, isOwnerRole: true, isSystem: true } },
         business: {
           select: {
             id: true,
@@ -93,7 +100,8 @@ function accountInclude() {
 
 function membershipInclude() {
   return {
-    user: { select: { id: true, email: true, phone: true, firstName: true, lastName: true, isActive: true, createdAt: true, updatedAt: true } },
+    user: { select: { id: true, email: true, phone: true, avatar: true, firstName: true, lastName: true, isActive: true, createdAt: true, updatedAt: true } },
+    role: { select: { id: true, code: true, title: true, color: true, isOwnerRole: true, isSystem: true } },
     business: {
       select: {
         id: true,
@@ -111,11 +119,11 @@ async function listBusinessUserAccounts(query) {
   const where = {};
 
   if (query.isActive !== undefined) where.isActive = query.isActive;
-  if (query.businessId || query.role) {
+  if (query.businessId || query.roleId) {
     where.memberships = {
       some: {
         ...(query.businessId ? { businessId: query.businessId } : {}),
-        ...(query.role ? { role: query.role } : {}),
+        ...(query.roleId ? { roleId: query.roleId } : {}),
       },
     };
   }
@@ -152,7 +160,7 @@ async function listBusinessUsers(query) {
   const where = {};
 
   if (query.businessId) where.businessId = query.businessId;
-  if (query.role) where.role = query.role;
+  if (query.roleId) where.roleId = query.roleId;
   if (query.isActive !== undefined) where.isActive = query.isActive;
   if (query.q) {
     where.user = {
@@ -210,6 +218,7 @@ async function createBusinessUserAccount(data, req) {
     data: {
       email: data.email,
       phone: data.phone ?? null,
+      avatar: data.avatar ?? null,
       passwordHash: await bcrypt.hash(data.password, 12),
       firstName: data.firstName ?? null,
       lastName: data.lastName ?? null,
@@ -222,6 +231,14 @@ async function createBusinessUserAccount(data, req) {
 
 async function createBusinessUser(data, req) {
   await assertBusiness(data.businessId);
+  const role = data.roleId
+    ? await assertRoleBelongsToBusiness(data.roleId, data.businessId)
+    : await getDefaultBusinessRole(data.businessId);
+  if (!role) {
+    throw new AppError(400, 'VALIDATION_ERROR', 'Validation failed', {
+      errors: [{ path: 'roleId', message: 'At least one active business role is required' }],
+    });
+  }
 
   const created = await prisma.$transaction(async (tx) => {
     let user = await tx.businessUser.findUnique({ where: { email: data.email } });
@@ -235,6 +252,7 @@ async function createBusinessUser(data, req) {
         data: {
           email: data.email,
           phone: data.phone ?? null,
+          avatar: data.avatar ?? null,
           passwordHash: await bcrypt.hash(data.password, 12),
           firstName: data.firstName ?? null,
           lastName: data.lastName ?? null,
@@ -244,6 +262,7 @@ async function createBusinessUser(data, req) {
     } else {
       const userUpdate = {};
       if (data.phone) userUpdate.phone = data.phone;
+      if (data.avatar) userUpdate.avatar = data.avatar;
       if (data.firstName) userUpdate.firstName = data.firstName;
       if (data.lastName) userUpdate.lastName = data.lastName;
       if (data.password) userUpdate.passwordHash = await bcrypt.hash(data.password, 12);
@@ -263,7 +282,7 @@ async function createBusinessUser(data, req) {
       data: {
         businessId: data.businessId,
         userId: user.id,
-        role: data.role || 'STAFF',
+        roleId: role.id,
         isActive: data.isActive ?? true,
       },
     });
@@ -275,6 +294,14 @@ async function createBusinessUser(data, req) {
 
 async function createBusinessMembership(data, req) {
   await assertBusiness(data.businessId);
+  const role = data.roleId
+    ? await assertRoleBelongsToBusiness(data.roleId, data.businessId)
+    : await getDefaultBusinessRole(data.businessId);
+  if (!role) {
+    throw new AppError(400, 'VALIDATION_ERROR', 'Validation failed', {
+      errors: [{ path: 'roleId', message: 'At least one active business role is required' }],
+    });
+  }
   const user = await prisma.businessUser.findUnique({ where: { id: data.userId } });
   if (!user) {
     throw new AppError(400, 'VALIDATION_ERROR', 'Validation failed', {
@@ -293,7 +320,7 @@ async function createBusinessMembership(data, req) {
     data: {
       businessId: data.businessId,
       userId: data.userId,
-      role: data.role || 'STAFF',
+      roleId: role.id,
       isActive: data.isActive ?? true,
     },
   });
@@ -314,6 +341,7 @@ async function updateBusinessUserAccount(id, data, req) {
     updateData.email = data.email;
   }
   if (data.phone !== undefined) updateData.phone = data.phone;
+  if (data.avatar !== undefined) updateData.avatar = data.avatar;
   if (data.firstName !== undefined) updateData.firstName = data.firstName;
   if (data.lastName !== undefined) updateData.lastName = data.lastName;
   if (data.isActive !== undefined) updateData.isActive = data.isActive;
@@ -328,11 +356,13 @@ async function updateBusinessUser(id, data, req) {
   const existing = await prisma.businessMembership.findUnique({ where: { id }, include: { user: true } });
   if (!existing) throw new AppError(404, 'NOT_FOUND', 'Business member not found');
   if (data.businessId !== undefined) await assertBusiness(data.businessId);
+  const nextBusinessId = data.businessId ?? existing.businessId;
+  if (data.roleId !== undefined) await assertRoleBelongsToBusiness(data.roleId, nextBusinessId);
 
   const updated = await prisma.$transaction(async (tx) => {
     const membershipData = {};
     if (data.businessId !== undefined) membershipData.businessId = data.businessId;
-    if (data.role !== undefined) membershipData.role = data.role;
+    if (data.roleId !== undefined) membershipData.roleId = data.roleId;
     if (data.isActive !== undefined) membershipData.isActive = data.isActive;
 
     const userData = {};
@@ -344,6 +374,7 @@ async function updateBusinessUser(id, data, req) {
       userData.email = data.email;
     }
     if (data.phone !== undefined) userData.phone = data.phone;
+    if (data.avatar !== undefined) userData.avatar = data.avatar;
     if (data.firstName !== undefined) userData.firstName = data.firstName;
     if (data.lastName !== undefined) userData.lastName = data.lastName;
     if (data.password !== undefined) userData.passwordHash = await bcrypt.hash(data.password, 12);
@@ -379,6 +410,7 @@ async function updateBusinessMembership(id, data, req) {
   const updateData = {};
   const nextBusinessId = data.businessId ?? existing.businessId;
   const nextUserId = data.userId ?? existing.userId;
+  if (data.roleId !== undefined) await assertRoleBelongsToBusiness(data.roleId, nextBusinessId);
   if (nextBusinessId !== existing.businessId || nextUserId !== existing.userId) {
     const duplicate = await prisma.businessMembership.findUnique({
       where: { businessId_userId: { businessId: nextBusinessId, userId: nextUserId } },
@@ -389,7 +421,7 @@ async function updateBusinessMembership(id, data, req) {
   }
   if (data.businessId !== undefined) updateData.businessId = data.businessId;
   if (data.userId !== undefined) updateData.userId = data.userId;
-  if (data.role !== undefined) updateData.role = data.role;
+  if (data.roleId !== undefined) updateData.roleId = data.roleId;
   if (data.isActive !== undefined) updateData.isActive = data.isActive;
 
   const updated = await prisma.businessMembership.update({ where: { id }, data: updateData });

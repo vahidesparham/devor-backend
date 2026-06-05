@@ -9,6 +9,7 @@ const traceId = require("./middlewares/traceId");
 const errorHandler = require("./shared/http/errorHandler");
 const { AppError, ok } = require("./shared/http/response");
 const adminRoutes = require("./routes/admin.routes");
+const businessRoutes = require("./routes/business.routes");
 
 const app = express();
 
@@ -45,6 +46,7 @@ app.get("/health", (_req, res) => {
 });
 
 app.use("/v1/admin", adminRoutes);
+app.use("/v1/business", businessRoutes);
 
 app.use((_req, _res, next) => {
     next(new AppError(404, "NOT_FOUND", "Route not found"));

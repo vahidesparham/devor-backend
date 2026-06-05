@@ -1,0 +1,1 @@
+ALTER TABLE `BusinessUser` ADD COLUMN `avatar` VARCHAR(500) NULL;

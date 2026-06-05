@@ -7,10 +7,11 @@ const baseBodySchema = z.object({
   businessId: z.coerce.number().int().positive(),
   email: z.string().trim().toLowerCase().email().max(191),
   phone: nullableString(80),
+  avatar: nullableString(500),
   password: z.string().min(6).max(100).optional(),
   firstName: optionalText(100),
   lastName: optionalText(100),
-  role: z.enum(['OWNER', 'MANAGER', 'STAFF']).optional().default('STAFF'),
+  roleId: z.coerce.number().int().positive().optional(),
   isActive: z.boolean().optional().default(true),
 });
 
@@ -25,7 +26,7 @@ const updateBusinessUserSchema = baseBodySchema.partial().superRefine((data, ctx
 const createBusinessMembershipSchema = z.object({
   businessId: z.coerce.number().int().positive(),
   userId: z.coerce.number().int().positive(),
-  role: z.enum(['OWNER', 'MANAGER', 'STAFF']).optional().default('STAFF'),
+  roleId: z.coerce.number().int().positive().optional(),
   isActive: z.boolean().optional().default(true),
 });
 
@@ -38,6 +39,7 @@ const updateBusinessMembershipSchema = createBusinessMembershipSchema.partial().
 const accountBodySchema = z.object({
   email: z.string().trim().toLowerCase().email().max(191),
   phone: nullableString(80),
+  avatar: nullableString(500),
   password: z.string().min(6).max(100).optional(),
   firstName: optionalText(100),
   lastName: optionalText(100),
@@ -59,7 +61,7 @@ const listBusinessUsersSchema = z.object({
   pageSize: z.coerce.number().int().min(1).max(100).optional().default(20),
   q: z.string().trim().max(255).optional(),
   businessId: z.coerce.number().int().positive().optional(),
-  role: z.enum(['OWNER', 'MANAGER', 'STAFF']).optional(),
+  roleId: z.coerce.number().int().positive().optional(),
   isActive: z.preprocess((val) => {
     if (val === undefined || val === '') return undefined;
     if (val === 'true') return true;
