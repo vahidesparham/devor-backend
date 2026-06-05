@@ -98,6 +98,7 @@ const languages = [
 
 const imageConfigs = [
     { code: "admin_avatar", width: 800, height: 800, thumbnailWidth: 200, thumbnailHeight: 200, folderName: "admins" },
+    { code: "language_image", width: 512, height: 512, thumbnailWidth: 128, thumbnailHeight: 128, folderName: "languages" },
     { code: "business_user_avatar", width: 800, height: 800, thumbnailWidth: 200, thumbnailHeight: 200, folderName: "business-user-avatars" },
     { code: "business_logo", width: 512, height: 512, thumbnailWidth: 128, thumbnailHeight: 128, folderName: "business-logos" },
     { code: "business_cover", width: 1200, height: 800, thumbnailWidth: 360, thumbnailHeight: 240, folderName: "business-covers" },

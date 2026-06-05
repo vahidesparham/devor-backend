@@ -71,6 +71,7 @@ async function createLanguage(data, req) {
         code: data.code,
         name: data.name,
         nativeName: data.nativeName ?? null,
+        image: data.image ?? null,
         direction: data.direction,
         isActive: data.isActive,
         isDefault: data.isDefault
@@ -100,6 +101,7 @@ async function updateLanguage(id, data, req) {
     code: existing.code,
     name: existing.name,
     nativeName: existing.nativeName,
+    image: existing.image,
     direction: existing.direction,
     isActive: existing.isActive,
     isDefault: existing.isDefault
@@ -131,6 +133,7 @@ async function updateLanguage(id, data, req) {
         ...(data.code !== undefined ? { code: data.code } : {}),
         ...(data.name !== undefined ? { name: data.name } : {}),
         ...(data.nativeName !== undefined ? { nativeName: data.nativeName } : {}),
+        ...(data.image !== undefined ? { image: data.image } : {}),
         ...(data.direction !== undefined ? { direction: data.direction } : {}),
         ...(data.isActive !== undefined ? { isActive: data.isActive } : {}),
         ...(data.isDefault !== undefined ? { isDefault: data.isDefault } : {})
@@ -147,6 +150,7 @@ async function updateLanguage(id, data, req) {
       code: updated.code,
       name: updated.name,
       nativeName: updated.nativeName,
+      image: updated.image,
       direction: updated.direction,
       isActive: updated.isActive,
       isDefault: updated.isDefault
@@ -178,6 +182,7 @@ async function deleteLanguage(id, req) {
       code: existing.code,
       name: existing.name,
       nativeName: existing.nativeName,
+      image: existing.image,
       direction: existing.direction,
       isActive: existing.isActive,
       isDefault: existing.isDefault

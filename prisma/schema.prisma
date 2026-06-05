@@ -169,6 +169,7 @@ model Language {
   code                                    String                                   @unique @db.VarChar(20)
   name                                    String                                   @db.VarChar(100)
   nativeName                              String?                                  @db.VarChar(100)
+  image                                   String?                                  @db.VarChar(500)
   direction                               TextDirection                            @default(LTR)
   isActive                                Boolean                                  @default(true)
   isDefault                               Boolean                                  @default(false)

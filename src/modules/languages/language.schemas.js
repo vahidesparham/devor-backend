@@ -14,6 +14,7 @@ const createLanguageSchema = z.object({
   code: codeSchema,
   name: z.string().trim().min(1).max(100),
   nativeName: z.string().trim().max(100).optional().nullable(),
+  image: z.string().trim().max(500).optional().nullable(),
   direction: directionSchema.optional().default('LTR'),
   isActive: z.boolean().optional().default(true),
   isDefault: z.boolean().optional().default(false)
@@ -24,6 +25,7 @@ const updateLanguageSchema = z
     code: codeSchema.optional(),
     name: z.string().trim().min(1).max(100).optional(),
     nativeName: z.string().trim().max(100).optional().nullable(),
+    image: z.string().trim().max(500).optional().nullable(),
     direction: directionSchema.optional(),
     isActive: z.boolean().optional(),
     isDefault: z.boolean().optional()
