@@ -178,6 +178,7 @@ model Language {
   slideshowTranslations                   SlideshowTranslation[]
   onboardingPageTranslations              OnboardingPageTranslation[]
   contentPageTranslations                 ContentPageTranslation[]
+  blogPostTranslations                    BlogPostTranslation[]
   faqCategoryTranslations                 FaqCategoryTranslation[]
   faqTranslations                         FaqTranslation[]
   contactPageTranslations                 ContactPageTranslation[]
@@ -361,6 +362,39 @@ model ContentPageTranslation {
   @@index([lang, title])
   @@index([lang, isActive])
   @@index([contentPageId])
+}
+
+model BlogPost {
+  id             Int                   @id @default(autoincrement())
+  image          String?               @db.VarChar(500)
+  readingMinutes Int?
+  isActive       Boolean               @default(true)
+  createdAt      DateTime              @default(now())
+  updatedAt      DateTime              @updatedAt
+  translations   BlogPostTranslation[]
+
+  @@index([isActive])
+  @@index([createdAt])
+}
+
+model BlogPostTranslation {
+  id               Int      @id @default(autoincrement())
+  blogPostId       Int
+  lang             String   @db.VarChar(20)
+  title            String   @db.VarChar(255)
+  shortDescription String?  @db.VarChar(500)
+  body             String   @db.LongText
+  isActive         Boolean  @default(true)
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  blogPost BlogPost @relation(fields: [blogPostId], references: [id], onDelete: Cascade)
+  language Language @relation(fields: [lang], references: [code], onDelete: Restrict, onUpdate: Cascade)
+
+  @@unique([blogPostId, lang])
+  @@index([lang, title])
+  @@index([lang, isActive])
+  @@index([blogPostId])
 }
 
 model FaqCategory {
@@ -1046,6 +1080,55 @@ model BusinessRefreshToken {
   createdAt           DateTime  @default(now())
 
   user BusinessUser @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+}
+
+model AppUser {
+  id            Int               @id @default(autoincrement())
+  phone         String            @unique @db.VarChar(80)
+  countryCode   String?           @db.VarChar(10)
+  phoneCode     String?           @db.VarChar(20)
+  avatar        String?           @db.VarChar(500)
+  email         String?           @unique @db.VarChar(191)
+  firstName     String?           @db.VarChar(100)
+  lastName      String?           @db.VarChar(100)
+  isActive      Boolean           @default(true)
+  createdAt     DateTime          @default(now())
+  updatedAt     DateTime          @updatedAt
+  refreshTokens AppRefreshToken[]
+
+  @@index([countryCode])
+  @@index([isActive])
+}
+
+model AppOtpChallenge {
+  id          Int       @id @default(autoincrement())
+  phone       String    @db.VarChar(80)
+  countryCode String?   @db.VarChar(10)
+  phoneCode   String?   @db.VarChar(20)
+  code        String    @db.VarChar(10)
+  expiresAt   DateTime
+  consumedAt  DateTime?
+  createdAt   DateTime  @default(now())
+
+  @@index([phone])
+  @@index([expiresAt])
+}
+
+model AppRefreshToken {
+  id                  Int       @id @default(autoincrement())
+  userId              Int
+  tokenHash           String    @unique @db.VarChar(191)
+  expiresAt           DateTime?
+  revokedAt           DateTime?
+  revokedReason       String?   @db.VarChar(255)
+  replacedByTokenHash String?   @db.VarChar(191)
+  createdByIp         String?   @db.VarChar(100)
+  userAgent           String?   @db.VarChar(255)
+  createdAt           DateTime  @default(now())
+
+  user AppUser @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([userId])
 }
