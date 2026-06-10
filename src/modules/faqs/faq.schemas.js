@@ -22,12 +22,10 @@ const booleanQuerySchema = z
 
 const translationSchema = z.object({
   lang: langCodeSchema,
-  title: z.string().trim().min(1).max(255),
-  description: z.string().trim().max(2000).optional().nullable(),
+  question: z.string().trim().min(1).max(500),
+  answer: z.string().trim().min(1),
   isActive: z.boolean().optional().default(true),
 });
-
-const nullableString = (max) => z.preprocess((val) => (val === '' ? null : val), z.string().trim().max(max).nullable().optional());
 
 function validateUniqueLangs(data, ctx) {
   const langs = (data.translations || []).map((item) => item.lang);
@@ -40,26 +38,24 @@ function validateUniqueLangs(data, ctx) {
   }
 }
 
-const createOnboardingPageSchema = z
+const createFaqSchema = z
   .object({
-    image: z.string().trim().min(1).max(500),
-    color: nullableString(30),
+    categoryId: z.coerce.number().int().positive(),
     displayOrder: z.coerce.number().int().min(0).optional().default(0),
     isActive: z.boolean().optional().default(true),
     translations: z.array(translationSchema).min(1),
   })
   .superRefine(validateUniqueLangs);
 
-const updateOnboardingPageSchema = z
+const updateFaqSchema = z
   .object({
-    image: z.string().trim().min(1).max(500).optional(),
-    color: nullableString(30),
+    categoryId: z.coerce.number().int().positive().optional(),
     displayOrder: z.coerce.number().int().min(0).optional(),
     isActive: z.boolean().optional(),
     translations: z.array(translationSchema).min(1).optional(),
   })
   .superRefine((data, ctx) => {
-    const hasCore = data.image !== undefined || data.color !== undefined || data.displayOrder !== undefined || data.isActive !== undefined;
+    const hasCore = data.categoryId !== undefined || data.displayOrder !== undefined || data.isActive !== undefined;
     const hasTranslations = Array.isArray(data.translations) && data.translations.length > 0;
 
     if (!hasCore && !hasTranslations) {
@@ -69,10 +65,11 @@ const updateOnboardingPageSchema = z
     if (hasTranslations) validateUniqueLangs(data, ctx);
   });
 
-const listOnboardingPagesSchema = z.object({
+const listFaqsSchema = z.object({
   page: z.coerce.number().int().min(1).optional().default(1),
   pageSize: z.coerce.number().int().min(1).max(100).optional().default(20),
   q: z.string().trim().max(255).optional(),
+  categoryId: z.coerce.number().int().positive().optional(),
   isActive: booleanQuerySchema,
   sortBy: z.enum(['id', 'displayOrder', 'createdAt', 'updatedAt']).optional().default('displayOrder'),
   sortDir: z.enum(['asc', 'desc']).optional().default('asc'),
@@ -83,8 +80,8 @@ const idParamSchema = z.object({
 });
 
 module.exports = {
-  createOnboardingPageSchema,
-  updateOnboardingPageSchema,
-  listOnboardingPagesSchema,
+  createFaqSchema,
+  updateFaqSchema,
+  listFaqsSchema,
   idParamSchema,
 };

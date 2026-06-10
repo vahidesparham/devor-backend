@@ -10,6 +10,7 @@ const errorHandler = require("./shared/http/errorHandler");
 const { AppError, ok } = require("./shared/http/response");
 const adminRoutes = require("./routes/admin.routes");
 const businessRoutes = require("./routes/business.routes");
+const appPublicRoutes = require("./routes/app-public.routes");
 
 const app = express();
 
@@ -17,6 +18,16 @@ const corsOptions = {
     origin(origin, callback) {
         if (!origin || env.CORS_ORIGINS.includes("*") || env.CORS_ORIGINS.includes(origin)) {
             return callback(null, true);
+        }
+        if (env.NODE_ENV === "development") {
+            try {
+                const { hostname } = new URL(origin);
+                if (hostname === "localhost" || hostname === "127.0.0.1") {
+                    return callback(null, true);
+                }
+            } catch (_error) {
+                // Fall through to the configured CORS rejection below.
+            }
         }
         return callback(new Error("Not allowed by CORS"));
     },
@@ -47,6 +58,7 @@ app.get("/health", (_req, res) => {
 
 app.use("/v1/admin", adminRoutes);
 app.use("/v1/business", businessRoutes);
+app.use("/v1/app", appPublicRoutes);
 
 app.use((_req, _res, next) => {
     next(new AppError(404, "NOT_FOUND", "Route not found"));

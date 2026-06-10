@@ -177,6 +177,10 @@ model Language {
   updatedAt                               DateTime                                 @updatedAt
   slideshowTranslations                   SlideshowTranslation[]
   onboardingPageTranslations              OnboardingPageTranslation[]
+  contentPageTranslations                 ContentPageTranslation[]
+  faqCategoryTranslations                 FaqCategoryTranslation[]
+  faqTranslations                         FaqTranslation[]
+  contactPageTranslations                 ContactPageTranslation[]
   bannerTranslations                      BannerTranslation[]
   businessTranslations                    BusinessTranslation[]
   serviceTypeTranslations                 ServiceTypeTranslation[]
@@ -297,6 +301,7 @@ model SlideshowTranslation {
 model OnboardingPage {
   id           Int                         @id @default(autoincrement())
   image        String                      @db.VarChar(500)
+  color        String?                     @db.VarChar(30)
   displayOrder Int                         @default(0)
   isActive     Boolean                     @default(true)
   createdAt    DateTime                    @default(now())
@@ -324,6 +329,139 @@ model OnboardingPageTranslation {
   @@index([lang, title])
   @@index([lang, isActive])
   @@index([onboardingPageId])
+}
+
+model ContentPage {
+  id           Int                      @id @default(autoincrement())
+  slug         String                   @unique @db.VarChar(160)
+  image        String?                  @db.VarChar(500)
+  isActive     Boolean                  @default(true)
+  createdAt    DateTime                 @default(now())
+  updatedAt    DateTime                 @updatedAt
+  translations ContentPageTranslation[]
+
+  @@index([isActive])
+  @@index([createdAt])
+}
+
+model ContentPageTranslation {
+  id            Int      @id @default(autoincrement())
+  contentPageId Int
+  lang          String   @db.VarChar(20)
+  title         String   @db.VarChar(255)
+  body          String   @db.LongText
+  isActive      Boolean  @default(true)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  contentPage ContentPage @relation(fields: [contentPageId], references: [id], onDelete: Cascade)
+  language    Language    @relation(fields: [lang], references: [code], onDelete: Restrict, onUpdate: Cascade)
+
+  @@unique([contentPageId, lang])
+  @@index([lang, title])
+  @@index([lang, isActive])
+  @@index([contentPageId])
+}
+
+model FaqCategory {
+  id           Int                      @id @default(autoincrement())
+  image        String?                  @db.VarChar(500)
+  displayOrder Int                      @default(0)
+  isActive     Boolean                  @default(true)
+  createdAt    DateTime                 @default(now())
+  updatedAt    DateTime                 @updatedAt
+  translations FaqCategoryTranslation[]
+  faqs         Faq[]
+
+  @@index([isActive, displayOrder])
+  @@index([createdAt])
+}
+
+model FaqCategoryTranslation {
+  id            Int      @id @default(autoincrement())
+  faqCategoryId Int
+  lang          String   @db.VarChar(20)
+  title         String   @db.VarChar(255)
+  isActive      Boolean  @default(true)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  faqCategory FaqCategory @relation(fields: [faqCategoryId], references: [id], onDelete: Cascade)
+  language    Language    @relation(fields: [lang], references: [code], onDelete: Restrict, onUpdate: Cascade)
+
+  @@unique([faqCategoryId, lang])
+  @@index([lang, title])
+  @@index([lang, isActive])
+  @@index([faqCategoryId])
+}
+
+model Faq {
+  id           Int              @id @default(autoincrement())
+  categoryId   Int
+  displayOrder Int              @default(0)
+  isActive     Boolean          @default(true)
+  createdAt    DateTime         @default(now())
+  updatedAt    DateTime         @updatedAt
+  category     FaqCategory      @relation(fields: [categoryId], references: [id], onDelete: Cascade)
+  translations FaqTranslation[]
+
+  @@index([categoryId, isActive, displayOrder])
+  @@index([createdAt])
+}
+
+model FaqTranslation {
+  id        Int      @id @default(autoincrement())
+  faqId     Int
+  lang      String   @db.VarChar(20)
+  question  String   @db.VarChar(500)
+  answer    String   @db.LongText
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  faq      Faq      @relation(fields: [faqId], references: [id], onDelete: Cascade)
+  language Language @relation(fields: [lang], references: [code], onDelete: Restrict, onUpdate: Cascade)
+
+  @@unique([faqId, lang])
+  @@index([lang, question])
+  @@index([lang, isActive])
+  @@index([faqId])
+}
+
+model ContactPage {
+  id                 Int                      @id
+  instagram          String?                  @db.VarChar(500)
+  telegram           String?                  @db.VarChar(500)
+  whatsapp           String?                  @db.VarChar(500)
+  youtube            String?                  @db.VarChar(500)
+  tiktok             String?                  @db.VarChar(500)
+  email              String?                  @db.VarChar(191)
+  supportPhoneNumber String?                  @db.VarChar(80)
+  createdAt          DateTime                 @default(now())
+  updatedAt          DateTime                 @updatedAt
+  translations       ContactPageTranslation[]
+}
+
+model ContactPageTranslation {
+  id            Int      @id @default(autoincrement())
+  contactPageId Int
+  lang          String   @db.VarChar(20)
+  title         String   @db.VarChar(255)
+  body          String   @db.LongText
+  phoneNumber   String?  @db.VarChar(80)
+  address       String?  @db.Text
+  workingHours  String?  @db.Text
+  isActive      Boolean  @default(true)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  contactPage ContactPage @relation(fields: [contactPageId], references: [id], onDelete: Cascade)
+  language    Language    @relation(fields: [lang], references: [code], onDelete: Restrict, onUpdate: Cascade)
+
+  @@unique([contactPageId, lang])
+  @@index([lang, title])
+  @@index([lang, isActive])
+  @@index([contactPageId])
 }
 
 model Banner {
@@ -579,6 +717,7 @@ model Business {
   slug                String                     @unique @db.VarChar(160)
   logoImage           String?                    @db.VarChar(500)
   coverImage          String?                    @db.VarChar(500)
+  verticalImage       String?                    @db.VarChar(500)
   phone               String?                    @db.VarChar(80)
   email               String?                    @db.VarChar(191)
   website             String?                    @db.VarChar(500)

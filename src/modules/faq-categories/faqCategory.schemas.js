@@ -23,11 +23,8 @@ const booleanQuerySchema = z
 const translationSchema = z.object({
   lang: langCodeSchema,
   title: z.string().trim().min(1).max(255),
-  description: z.string().trim().max(2000).optional().nullable(),
   isActive: z.boolean().optional().default(true),
 });
-
-const nullableString = (max) => z.preprocess((val) => (val === '' ? null : val), z.string().trim().max(max).nullable().optional());
 
 function validateUniqueLangs(data, ctx) {
   const langs = (data.translations || []).map((item) => item.lang);
@@ -40,26 +37,24 @@ function validateUniqueLangs(data, ctx) {
   }
 }
 
-const createOnboardingPageSchema = z
+const createFaqCategorySchema = z
   .object({
-    image: z.string().trim().min(1).max(500),
-    color: nullableString(30),
+    image: z.string().trim().max(500).optional().nullable(),
     displayOrder: z.coerce.number().int().min(0).optional().default(0),
     isActive: z.boolean().optional().default(true),
     translations: z.array(translationSchema).min(1),
   })
   .superRefine(validateUniqueLangs);
 
-const updateOnboardingPageSchema = z
+const updateFaqCategorySchema = z
   .object({
-    image: z.string().trim().min(1).max(500).optional(),
-    color: nullableString(30),
+    image: z.string().trim().max(500).optional().nullable(),
     displayOrder: z.coerce.number().int().min(0).optional(),
     isActive: z.boolean().optional(),
     translations: z.array(translationSchema).min(1).optional(),
   })
   .superRefine((data, ctx) => {
-    const hasCore = data.image !== undefined || data.color !== undefined || data.displayOrder !== undefined || data.isActive !== undefined;
+    const hasCore = data.image !== undefined || data.displayOrder !== undefined || data.isActive !== undefined;
     const hasTranslations = Array.isArray(data.translations) && data.translations.length > 0;
 
     if (!hasCore && !hasTranslations) {
@@ -69,7 +64,7 @@ const updateOnboardingPageSchema = z
     if (hasTranslations) validateUniqueLangs(data, ctx);
   });
 
-const listOnboardingPagesSchema = z.object({
+const listFaqCategoriesSchema = z.object({
   page: z.coerce.number().int().min(1).optional().default(1),
   pageSize: z.coerce.number().int().min(1).max(100).optional().default(20),
   q: z.string().trim().max(255).optional(),
@@ -83,8 +78,8 @@ const idParamSchema = z.object({
 });
 
 module.exports = {
-  createOnboardingPageSchema,
-  updateOnboardingPageSchema,
-  listOnboardingPagesSchema,
+  createFaqCategorySchema,
+  updateFaqCategorySchema,
+  listFaqCategoriesSchema,
   idParamSchema,
 };

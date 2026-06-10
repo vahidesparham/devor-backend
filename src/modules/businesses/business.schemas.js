@@ -42,6 +42,7 @@ const baseBodySchema = z.object({
   slug: z.string().trim().toLowerCase().min(2).max(160).regex(/^[a-z0-9-]+$/),
   logoImage: nullableString(500),
   coverImage: nullableString(500),
+  verticalImage: nullableString(500),
   phone: nullableString(80),
   email: nullableString(191).refine((value) => !value || z.string().email().safeParse(value).success, 'Invalid email address'),
   website: nullableString(500),

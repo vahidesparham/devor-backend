@@ -8,6 +8,14 @@ const langCodeSchema = z
   .max(20)
   .regex(/^[a-z0-9-]+$/, 'lang must contain only lowercase letters, numbers, and "-"');
 
+const slugSchema = z
+  .string()
+  .trim()
+  .toLowerCase()
+  .min(1)
+  .max(160)
+  .regex(/^[a-z0-9]+(?:-[a-z0-9]+)*$/, 'slug must contain lowercase letters, numbers and hyphens');
+
 const booleanQuerySchema = z
   .preprocess((val) => {
     if (val === undefined) return undefined;
@@ -23,11 +31,9 @@ const booleanQuerySchema = z
 const translationSchema = z.object({
   lang: langCodeSchema,
   title: z.string().trim().min(1).max(255),
-  description: z.string().trim().max(2000).optional().nullable(),
+  body: z.string().trim().min(1),
   isActive: z.boolean().optional().default(true),
 });
-
-const nullableString = (max) => z.preprocess((val) => (val === '' ? null : val), z.string().trim().max(max).nullable().optional());
 
 function validateUniqueLangs(data, ctx) {
   const langs = (data.translations || []).map((item) => item.lang);
@@ -40,26 +46,24 @@ function validateUniqueLangs(data, ctx) {
   }
 }
 
-const createOnboardingPageSchema = z
+const createContentPageSchema = z
   .object({
-    image: z.string().trim().min(1).max(500),
-    color: nullableString(30),
-    displayOrder: z.coerce.number().int().min(0).optional().default(0),
+    slug: slugSchema,
+    image: z.string().trim().max(500).optional().nullable(),
     isActive: z.boolean().optional().default(true),
     translations: z.array(translationSchema).min(1),
   })
   .superRefine(validateUniqueLangs);
 
-const updateOnboardingPageSchema = z
+const updateContentPageSchema = z
   .object({
-    image: z.string().trim().min(1).max(500).optional(),
-    color: nullableString(30),
-    displayOrder: z.coerce.number().int().min(0).optional(),
+    slug: slugSchema.optional(),
+    image: z.string().trim().max(500).optional().nullable(),
     isActive: z.boolean().optional(),
     translations: z.array(translationSchema).min(1).optional(),
   })
   .superRefine((data, ctx) => {
-    const hasCore = data.image !== undefined || data.color !== undefined || data.displayOrder !== undefined || data.isActive !== undefined;
+    const hasCore = data.slug !== undefined || data.image !== undefined || data.isActive !== undefined;
     const hasTranslations = Array.isArray(data.translations) && data.translations.length > 0;
 
     if (!hasCore && !hasTranslations) {
@@ -69,13 +73,13 @@ const updateOnboardingPageSchema = z
     if (hasTranslations) validateUniqueLangs(data, ctx);
   });
 
-const listOnboardingPagesSchema = z.object({
+const listContentPagesSchema = z.object({
   page: z.coerce.number().int().min(1).optional().default(1),
   pageSize: z.coerce.number().int().min(1).max(100).optional().default(20),
   q: z.string().trim().max(255).optional(),
   isActive: booleanQuerySchema,
-  sortBy: z.enum(['id', 'displayOrder', 'createdAt', 'updatedAt']).optional().default('displayOrder'),
-  sortDir: z.enum(['asc', 'desc']).optional().default('asc'),
+  sortBy: z.enum(['id', 'slug', 'createdAt', 'updatedAt']).optional().default('createdAt'),
+  sortDir: z.enum(['asc', 'desc']).optional().default('desc'),
 });
 
 const idParamSchema = z.object({
@@ -83,8 +87,8 @@ const idParamSchema = z.object({
 });
 
 module.exports = {
-  createOnboardingPageSchema,
-  updateOnboardingPageSchema,
-  listOnboardingPagesSchema,
+  createContentPageSchema,
+  updateContentPageSchema,
+  listContentPagesSchema,
   idParamSchema,
 };

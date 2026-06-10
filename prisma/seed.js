@@ -38,6 +38,20 @@ const adminPermissions = [
     "onboarding_pages.create",
     "onboarding_pages.update",
     "onboarding_pages.delete",
+    "content_pages.read",
+    "content_pages.create",
+    "content_pages.update",
+    "content_pages.delete",
+    "faq_categories.read",
+    "faq_categories.create",
+    "faq_categories.update",
+    "faq_categories.delete",
+    "faqs.read",
+    "faqs.create",
+    "faqs.update",
+    "faqs.delete",
+    "contact_page.read",
+    "contact_page.update",
     "service_types.read",
     "service_types.create",
     "service_types.update",
@@ -102,6 +116,7 @@ const imageConfigs = [
     { code: "business_user_avatar", width: 800, height: 800, thumbnailWidth: 200, thumbnailHeight: 200, folderName: "business-user-avatars" },
     { code: "business_logo", width: 512, height: 512, thumbnailWidth: 128, thumbnailHeight: 128, folderName: "business-logos" },
     { code: "business_cover", width: 1200, height: 800, thumbnailWidth: 360, thumbnailHeight: 240, folderName: "business-covers" },
+    { code: "business_vertical", width: 800, height: 1200, thumbnailWidth: 240, thumbnailHeight: 360, folderName: "business-verticals" },
     { code: "business_gallery", width: 1600, height: 1000, thumbnailWidth: 400, thumbnailHeight: 250, folderName: "business-gallery" },
     { code: "business_slideshow", width: 1600, height: 700, thumbnailWidth: 480, thumbnailHeight: 210, folderName: "business-slideshows" },
     { code: "business_offering_image", width: 1000, height: 750, thumbnailWidth: 300, thumbnailHeight: 225, folderName: "business-offerings" },
@@ -115,6 +130,8 @@ const imageConfigs = [
     { code: "banner", width: 1440, height: 480, thumbnailWidth: 480, thumbnailHeight: 160, folderName: "banners" },
     { code: "slideshow", width: 1600, height: 700, thumbnailWidth: 480, thumbnailHeight: 210, folderName: "slideshows" },
     { code: "onboarding_page", width: 1080, height: 1080, thumbnailWidth: 320, thumbnailHeight: 320, folderName: "onboarding-pages" },
+    { code: "content_page", width: 1200, height: 800, thumbnailWidth: 360, thumbnailHeight: 240, folderName: "content-pages" },
+    { code: "faq_category", width: 800, height: 600, thumbnailWidth: 240, thumbnailHeight: 180, folderName: "faq-categories" },
 ];
 
 const businessPermissions = [
@@ -250,6 +267,14 @@ async function seedPanelSettings() {
     });
 }
 
+async function seedContactPage() {
+    await prisma.contactPage.upsert({
+        where: { id: 1 },
+        update: {},
+        create: { id: 1 },
+    });
+}
+
 async function seedBusinessPermissions() {
     for (const permission of businessPermissions) {
         await prisma.businessPermission.upsert({
@@ -266,6 +291,7 @@ async function main() {
     await seedLanguages();
     await seedImageConfigs();
     await seedPanelSettings();
+    await seedContactPage();
     await seedBusinessPermissions();
 
     console.log("Seed complete.");

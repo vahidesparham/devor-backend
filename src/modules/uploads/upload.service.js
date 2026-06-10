@@ -43,6 +43,10 @@ function safeExtension(filename, fallbackExt) {
     return ext.startsWith(".") ? ext : `.${ext}`;
 }
 
+function isSvgImage(file) {
+    return file?.mimetype === "image/svg+xml" || safeExtension(file?.originalname, "").toLowerCase() === ".svg";
+}
+
 function buildPublicLink(type, folder, fileName) {
     const folderPart = folder ? `${folder}/` : "";
     return `/uploads/${type}/${folderPart}${fileName}`;
@@ -99,13 +103,26 @@ async function uploadImage(payload) {
     await ensureDir(thumbsRoot);
 
     const basename = baseNameWithoutExt(file.originalname);
-    const fileName = `${basename}-${makeShortId()}.webp`;
+    const isSvg = isSvgImage(file);
+    const fileName = `${basename}-${makeShortId()}${isSvg ? ".svg" : ".webp"}`;
+    const thumbnailFileName = `${basename}-${makeShortId()}.webp`;
 
     const imagePath = path.join(uploadsRoot, fileName);
-    const thumbnailPath = path.join(thumbsRoot, fileName);
+    const thumbnailPath = path.join(thumbsRoot, thumbnailFileName);
     const metadata = await sharp(file.buffer).metadata();
 
-    if (skipCrop) {
+    if (isSvg) {
+        await fs.writeFile(imagePath, file.buffer);
+
+        await sharp(file.buffer)
+            .resize(config.thumbnailWidth, config.thumbnailHeight, {
+                fit: "contain",
+                withoutEnlargement: true,
+                background: { r: 255, g: 255, b: 255, alpha: 0 },
+            })
+            .webp({ quality: 80 })
+            .toFile(thumbnailPath);
+    } else if (skipCrop) {
         await sharp(file.buffer)
             .rotate()
             .webp({ quality: 85 })
@@ -139,9 +156,9 @@ async function uploadImage(payload) {
         folderName: selectedFolder,
         fileName,
         imageUrl: `/public/uploads/${selectedFolder}/${fileName}`,
-        thumbnailUrl: `/public/uploads/${selectedFolder}/thumbnails/${fileName}`,
-        width: skipCrop ? metadata.width || null : config.width,
-        height: skipCrop ? metadata.height || null : config.height,
+        thumbnailUrl: `/public/uploads/${selectedFolder}/thumbnails/${thumbnailFileName}`,
+        width: skipCrop || isSvg ? metadata.width || null : config.width,
+        height: skipCrop || isSvg ? metadata.height || null : config.height,
         thumbnailWidth: config.thumbnailWidth,
         thumbnailHeight: config.thumbnailHeight,
     };

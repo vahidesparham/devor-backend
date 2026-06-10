@@ -73,7 +73,6 @@ function mapLastChange(log) {
 function normalizeCore(item) {
   return {
     image: item.image,
-    color: item.color,
     displayOrder: item.displayOrder,
     isActive: item.isActive,
   };
@@ -84,19 +83,17 @@ function toListItem(item, selectedLang) {
   return {
     id: item.id,
     image: item.image,
-    color: item.color,
     displayOrder: item.displayOrder,
     isActive: item.isActive,
     createdAt: item.createdAt,
     updatedAt: item.updatedAt,
     lang: selectedLang,
     title: selected?.title || null,
-    description: selected?.description || null,
     translationIsActive: selected?.isActive ?? null,
   };
 }
 
-async function listOnboardingPages(query, lang) {
+async function listFaqCategories(query, lang) {
   const selectedLang = await resolveSelectedLang(query.lang || lang);
   const skip = (query.page - 1) * query.pageSize;
   const where = {};
@@ -104,14 +101,12 @@ async function listOnboardingPages(query, lang) {
   if (query.isActive !== undefined) where.isActive = query.isActive;
   if (query.q) {
     where.translations = {
-      some: {
-        OR: [{ title: { contains: query.q } }, { description: { contains: query.q } }],
-      },
+      some: { title: { contains: query.q } },
     };
   }
 
   const [items, total] = await Promise.all([
-    prisma.onboardingPage.findMany({
+    prisma.faqCategory.findMany({
       where,
       skip,
       take: query.pageSize,
@@ -120,11 +115,11 @@ async function listOnboardingPages(query, lang) {
         translations: {
           where: { lang: selectedLang },
           take: 1,
-          select: { title: true, description: true, isActive: true },
+          select: { title: true, isActive: true },
         },
       },
     }),
-    prisma.onboardingPage.count({ where }),
+    prisma.faqCategory.count({ where }),
   ]);
 
   return {
@@ -139,14 +134,14 @@ async function listOnboardingPages(query, lang) {
   };
 }
 
-async function getOnboardingPageById(id) {
+async function getFaqCategoryById(id) {
   const [item, lastChangeLog] = await Promise.all([
-    prisma.onboardingPage.findUnique({
+    prisma.faqCategory.findUnique({
       where: { id },
       include: { translations: { orderBy: { lang: 'asc' } } },
     }),
     prisma.auditLog.findFirst({
-      where: { entity: 'OnboardingPage', entityId: String(id), action: { in: ['UPDATE', 'CREATE'] } },
+      where: { entity: 'FaqCategory', entityId: String(id), action: { in: ['UPDATE', 'CREATE'] } },
       orderBy: { createdAt: 'desc' },
       include: {
         admin: {
@@ -156,24 +151,22 @@ async function getOnboardingPageById(id) {
     }),
   ]);
 
-  if (!item) throw new AppError(404, 'NOT_FOUND', 'Onboarding page not found');
+  if (!item) throw new AppError(404, 'NOT_FOUND', 'FAQ category not found');
   return { ...item, lastChange: mapLastChange(lastChangeLog) };
 }
 
-async function createOnboardingPage(data, req) {
+async function createFaqCategory(data, req) {
   await assertLanguagesExist([...new Set(data.translations.map((item) => item.lang))]);
 
-  const created = await prisma.onboardingPage.create({
+  const created = await prisma.faqCategory.create({
     data: {
-      image: data.image,
-      color: data.color || null,
+      image: data.image || null,
       displayOrder: data.displayOrder ?? 0,
       isActive: data.isActive ?? true,
       translations: {
         create: data.translations.map((item) => ({
           lang: item.lang,
           title: item.title,
-          description: item.description ?? null,
           isActive: item.isActive ?? true,
         })),
       },
@@ -183,7 +176,7 @@ async function createOnboardingPage(data, req) {
 
   await audit(req, {
     action: 'CREATE',
-    entity: 'OnboardingPage',
+    entity: 'FaqCategory',
     entityId: created.id,
     after: normalizeCore(created),
     details: { translationLangs: created.translations.map((item) => item.lang) },
@@ -192,20 +185,19 @@ async function createOnboardingPage(data, req) {
   return created;
 }
 
-async function updateOnboardingPage(id, data, req) {
-  const existing = await prisma.onboardingPage.findUnique({ where: { id }, include: { translations: true } });
-  if (!existing) throw new AppError(404, 'NOT_FOUND', 'Onboarding page not found');
+async function updateFaqCategory(id, data, req) {
+  const existing = await prisma.faqCategory.findUnique({ where: { id }, include: { translations: true } });
+  if (!existing) throw new AppError(404, 'NOT_FOUND', 'FAQ category not found');
 
   if (Array.isArray(data.translations)) {
     await assertLanguagesExist([...new Set(data.translations.map((item) => item.lang))]);
   }
 
   const updated = await prisma.$transaction(async (tx) => {
-    await tx.onboardingPage.update({
+    await tx.faqCategory.update({
       where: { id },
       data: {
-        ...(data.image !== undefined ? { image: data.image } : {}),
-        ...(data.color !== undefined ? { color: data.color || null } : {}),
+        ...(data.image !== undefined ? { image: data.image || null } : {}),
         ...(data.displayOrder !== undefined ? { displayOrder: data.displayOrder } : {}),
         ...(data.isActive !== undefined ? { isActive: data.isActive } : {}),
       },
@@ -213,33 +205,31 @@ async function updateOnboardingPage(id, data, req) {
 
     if (Array.isArray(data.translations)) {
       for (const item of data.translations) {
-        await tx.onboardingPageTranslation.upsert({
-          where: { onboardingPageId_lang: { onboardingPageId: id, lang: item.lang } },
+        await tx.faqCategoryTranslation.upsert({
+          where: { faqCategoryId_lang: { faqCategoryId: id, lang: item.lang } },
           update: {
             title: item.title,
-            description: item.description ?? null,
             isActive: item.isActive ?? true,
           },
           create: {
-            onboardingPageId: id,
+            faqCategoryId: id,
             lang: item.lang,
             title: item.title,
-            description: item.description ?? null,
             isActive: item.isActive ?? true,
           },
         });
       }
-      await tx.onboardingPageTranslation.deleteMany({
-        where: { onboardingPageId: id, lang: { notIn: data.translations.map((item) => item.lang) } },
+      await tx.faqCategoryTranslation.deleteMany({
+        where: { faqCategoryId: id, lang: { notIn: data.translations.map((item) => item.lang) } },
       });
     }
 
-    return tx.onboardingPage.findUnique({ where: { id }, include: { translations: { orderBy: { lang: 'asc' } } } });
+    return tx.faqCategory.findUnique({ where: { id }, include: { translations: { orderBy: { lang: 'asc' } } } });
   });
 
   await audit(req, {
     action: 'UPDATE',
-    entity: 'OnboardingPage',
+    entity: 'FaqCategory',
     entityId: id,
     before: normalizeCore(existing),
     after: normalizeCore(updated),
@@ -249,17 +239,17 @@ async function updateOnboardingPage(id, data, req) {
   return updated;
 }
 
-async function deleteOnboardingPage(id, req) {
-  const existing = await prisma.onboardingPage.findUnique({
+async function deleteFaqCategory(id, req) {
+  const existing = await prisma.faqCategory.findUnique({
     where: { id },
     include: { translations: { select: { lang: true } } },
   });
-  if (!existing) throw new AppError(404, 'NOT_FOUND', 'Onboarding page not found');
+  if (!existing) throw new AppError(404, 'NOT_FOUND', 'FAQ category not found');
 
-  await prisma.onboardingPage.delete({ where: { id } });
+  await prisma.faqCategory.delete({ where: { id } });
   await audit(req, {
     action: 'DELETE',
-    entity: 'OnboardingPage',
+    entity: 'FaqCategory',
     entityId: id,
     before: normalizeCore(existing),
     details: { translationLangs: existing.translations.map((item) => item.lang) },
@@ -267,15 +257,15 @@ async function deleteOnboardingPage(id, req) {
 }
 
 async function getNextDisplayOrder() {
-  const aggregate = await prisma.onboardingPage.aggregate({ _max: { displayOrder: true } });
+  const aggregate = await prisma.faqCategory.aggregate({ _max: { displayOrder: true } });
   return (aggregate._max.displayOrder || 0) + 10;
 }
 
 module.exports = {
-  listOnboardingPages,
-  getOnboardingPageById,
-  createOnboardingPage,
-  updateOnboardingPage,
-  deleteOnboardingPage,
+  listFaqCategories,
+  getFaqCategoryById,
+  createFaqCategory,
+  updateFaqCategory,
+  deleteFaqCategory,
   getNextDisplayOrder,
 };

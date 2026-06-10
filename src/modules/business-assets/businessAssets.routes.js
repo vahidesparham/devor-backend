@@ -17,6 +17,7 @@ const allowedImageConfigCodes = new Set([
   'business_user_avatar',
   'business_logo',
   'business_cover',
+  'business_vertical',
   'business_gallery',
   'business_slideshow',
   'offering_category_image',

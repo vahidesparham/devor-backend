@@ -37,6 +37,7 @@ function membershipInclude() {
           slug: true,
           logoImage: true,
           coverImage: true,
+          verticalImage: true,
           isActive: true,
           publicationStatus: true,
           translations: { take: 1, orderBy: { lang: 'asc' }, select: { title: true, lang: true } },
