@@ -3,6 +3,16 @@ const { z } = require('zod');
 const keySchema = z.string().trim().toLowerCase().min(2).max(80).regex(/^[a-z0-9_/-]+$/);
 const langCodeSchema = z.string().trim().toLowerCase().min(2).max(20).regex(/^[a-z0-9-]+$/);
 const nullableString = (max) => z.preprocess((val) => (val === '' ? null : val), z.string().trim().max(max).nullable().optional());
+const nullablePositiveInt = z.preprocess((val) => {
+  if (val === undefined || val === '' || val === null) return null;
+  return val;
+}, z.coerce.number().int().positive().nullable().optional());
+const optionalBoolean = z.preprocess((val) => {
+  if (val === undefined || val === '') return undefined;
+  if (val === 'true') return true;
+  if (val === 'false') return false;
+  return val;
+}, z.boolean()).optional();
 
 const translationSchema = z.object({
   lang: langCodeSchema,
@@ -12,8 +22,10 @@ const translationSchema = z.object({
 });
 
 const baseServiceTypeBodySchema = z.object({
+  parentId: nullablePositiveInt,
   code: keySchema,
   image: nullableString(500),
+  pinIconImage: nullableString(500),
   color: nullableString(30),
   displayOrder: z.coerce.number().int().min(0).optional().default(0),
   isActive: z.boolean().optional().default(true),
@@ -43,12 +55,9 @@ const listServiceTypesSchema = z.object({
   pageSize: z.coerce.number().int().min(1).max(100).optional().default(20),
   q: z.string().trim().max(255).optional(),
   lang: langCodeSchema.optional(),
-  isActive: z.preprocess((val) => {
-    if (val === undefined || val === '') return undefined;
-    if (val === 'true') return true;
-    if (val === 'false') return false;
-    return val;
-  }, z.boolean()).optional(),
+  parentId: nullablePositiveInt,
+  rootOnly: optionalBoolean,
+  isActive: optionalBoolean,
   sortBy: z.enum(['id', 'code', 'title', 'displayOrder', 'createdAt', 'updatedAt']).optional().default('displayOrder'),
   sortDir: z.enum(['asc', 'desc']).optional().default('asc'),
 });

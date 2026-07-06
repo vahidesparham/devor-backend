@@ -120,6 +120,63 @@ async function verifyOtp(data, req) {
   };
 }
 
+async function refresh(data, req) {
+  let payload;
+  try {
+    payload = jwt.verify(data.refreshToken, env.JWT_REFRESH_SECRET);
+  } catch (_err) {
+    throw new AppError(401, 'UNAUTHORIZED', 'Invalid or expired refresh token');
+  }
+
+  if (payload.scope !== 'app') throw new AppError(401, 'UNAUTHORIZED', 'Invalid refresh token scope');
+
+  const oldHash = hashToken(data.refreshToken);
+  const tokenRow = await prisma.appRefreshToken.findUnique({
+    where: { tokenHash: oldHash },
+  });
+
+  if (!tokenRow || tokenRow.revokedAt) {
+    throw new AppError(401, 'UNAUTHORIZED', 'Refresh token revoked or not found');
+  }
+
+  if (tokenRow.expiresAt && tokenRow.expiresAt.getTime() < Date.now()) {
+    throw new AppError(401, 'UNAUTHORIZED', 'Refresh token expired');
+  }
+
+  const user = await prisma.appUser.findUnique({ where: { id: Number(payload.sub) } });
+  if (!user || !user.isActive) throw new AppError(401, 'UNAUTHORIZED', 'User account is not active');
+
+  const accessToken = signAccessToken(user);
+  const refreshToken = signRefreshToken(user);
+  const newHash = hashToken(refreshToken);
+
+  await prisma.$transaction([
+    prisma.appRefreshToken.update({
+      where: { tokenHash: oldHash },
+      data: {
+        revokedAt: new Date(),
+        revokedReason: 'rotated',
+        replacedByTokenHash: newHash,
+      },
+    }),
+    prisma.appRefreshToken.create({
+      data: {
+        userId: user.id,
+        tokenHash: newHash,
+        expiresAt: new Date(jwt.decode(refreshToken).exp * 1000),
+        createdByIp: req.ip,
+        userAgent: req.get('user-agent') || null,
+      },
+    }),
+  ]);
+
+  return {
+    accessToken,
+    refreshToken,
+    user: appUserProfile(user),
+  };
+}
+
 async function completeProfile(userId, data) {
   const email = data.email || null;
   if (email) {
@@ -158,6 +215,7 @@ async function me(userId) {
 module.exports = {
   requestOtp,
   verifyOtp,
+  refresh,
   completeProfile,
   uploadAvatar,
   me,

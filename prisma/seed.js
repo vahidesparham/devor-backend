@@ -129,6 +129,7 @@ const imageConfigs = [
     { code: "business_offering_image", width: 1000, height: 750, thumbnailWidth: 300, thumbnailHeight: 225, folderName: "business-offerings" },
     { code: "offering_category_image", width: 800, height: 600, thumbnailWidth: 240, thumbnailHeight: 180, folderName: "offering-categories" },
     { code: "service_type_icon", width: 512, height: 512, thumbnailWidth: 128, thumbnailHeight: 128, folderName: "service-types" },
+    { code: "service_type_pin_icon", width: 512, height: 512, thumbnailWidth: 128, thumbnailHeight: 128, folderName: "service-type-pin-icons" },
     { code: "attribute_group_icon", width: 512, height: 512, thumbnailWidth: 128, thumbnailHeight: 128, folderName: "attribute-groups" },
     { code: "attribute_option_image", width: 512, height: 512, thumbnailWidth: 128, thumbnailHeight: 128, folderName: "attribute-options" },
     { code: "country_flag", width: 512, height: 512, thumbnailWidth: 128, thumbnailHeight: 128, folderName: "country-flags" },
@@ -268,7 +269,7 @@ async function seedPanelSettings() {
         update: {},
         create: {
             id: 1,
-            panelTitle: "Atlas Console",
+            panelTitle: "Devor",
             panelLogo: null,
             panelFavicon: null,
         },

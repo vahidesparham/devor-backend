@@ -30,6 +30,7 @@ const baseBodySchema = z.object({
   selectionMode: z.enum(['SINGLE', 'MULTIPLE']).optional().default('MULTIPLE'),
   unit: nullableString(60),
   isRequired: z.boolean().optional().default(false),
+  showInFilters: z.boolean().optional().default(false),
   displayOrder: z.coerce.number().int().min(0).optional().default(0),
   isActive: z.boolean().optional().default(true),
   translations: z.array(translationSchema).min(1),

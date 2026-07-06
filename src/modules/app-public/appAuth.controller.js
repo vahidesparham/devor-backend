@@ -11,6 +11,11 @@ async function verifyOtp(req, res) {
   return ok(res, { code: 'APP_OTP_VERIFIED', data: result });
 }
 
+async function refresh(req, res) {
+  const result = await service.refresh(req.body, req);
+  return ok(res, { code: 'APP_REFRESH_SUCCESS', data: result });
+}
+
 async function completeProfile(req, res) {
   const result = await service.completeProfile(req.appUser.id, req.body);
   return ok(res, { code: 'APP_PROFILE_COMPLETED', data: result });
@@ -29,6 +34,7 @@ async function me(req, res) {
 module.exports = {
   requestOtp,
   verifyOtp,
+  refresh,
   completeProfile,
   uploadAvatar,
   me,

@@ -10,7 +10,9 @@
     "prisma:fix-encoding": "node scripts/strip-bom-prisma.js",
     "prisma:generate": "node scripts/strip-bom-prisma.js && prisma generate",
     "prisma:migrate": "node scripts/strip-bom-prisma.js && prisma migrate dev",
-    "seed": "node scripts/strip-bom-prisma.js && node prisma/seed.js"
+    "seed": "node scripts/strip-bom-prisma.js && node prisma/seed.js",
+    "seed:demo:tajikistan": "node scripts/strip-bom-prisma.js && node prisma/seed-demo-tajikistan.js",
+    "seed:demo:content": "node scripts/strip-bom-prisma.js && node prisma/seed-content-demo.js"
   },
   "dependencies": {
     "@prisma/client": "^6.5.0",

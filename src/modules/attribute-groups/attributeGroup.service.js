@@ -12,14 +12,25 @@ function normalize(item) {
     selectionMode: item.selectionMode,
     unit: item.unit,
     isRequired: item.isRequired,
+    showInFilters: item.showInFilters,
     displayOrder: item.displayOrder,
     isActive: item.isActive,
   };
 }
 
 async function assertServiceType(id) {
-  const exists = await prisma.serviceType.findUnique({ where: { id }, select: { id: true } });
+  const exists = await prisma.serviceType.findUnique({ where: { id }, select: { id: true, parentId: true } });
   if (!exists) throw new AppError(400, 'VALIDATION_ERROR', 'Validation failed', { errors: [{ path: 'serviceTypeId', message: 'Service type not found' }] });
+  if (exists.parentId) {
+    throw new AppError(400, 'VALIDATION_ERROR', 'Validation failed', { errors: [{ path: 'serviceTypeId', message: 'Attribute groups can only be defined for top-level service types' }] });
+  }
+}
+
+async function resolveTopLevelServiceTypeId(id) {
+  if (!id) return null;
+  const serviceType = await prisma.serviceType.findUnique({ where: { id: Number(id) }, select: { id: true, parentId: true } });
+  if (!serviceType) return Number(id);
+  return serviceType.parentId || serviceType.id;
 }
 
 async function assertLanguages(codes) {
@@ -65,7 +76,7 @@ async function listAttributeGroups(query) {
   const selectedLang = await resolveSelectedLang(query.lang);
   const skip = (query.page - 1) * query.pageSize;
   const where = {};
-  if (query.serviceTypeId) where.serviceTypeId = query.serviceTypeId;
+  if (query.serviceTypeId) where.serviceTypeId = await resolveTopLevelServiceTypeId(query.serviceTypeId);
   if (query.isActive !== undefined) where.isActive = query.isActive;
   if (query.q) {
     where.OR = [
@@ -241,7 +252,7 @@ async function deleteAttributeGroup(id, req) {
 }
 
 async function getNextDisplayOrder(serviceTypeId) {
-  const where = serviceTypeId ? { serviceTypeId: Number(serviceTypeId) } : {};
+  const where = serviceTypeId ? { serviceTypeId: await resolveTopLevelServiceTypeId(serviceTypeId) } : {};
   const aggregate = await prisma.attributeGroup.aggregate({ where, _max: { displayOrder: true } });
   return (aggregate._max.displayOrder || 0) + 10;
 }

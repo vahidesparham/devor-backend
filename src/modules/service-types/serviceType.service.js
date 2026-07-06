@@ -4,9 +4,11 @@ const { audit } = require('../../shared/audit/audit');
 
 function normalize(item) {
   return {
+    parentId: item.parentId ?? null,
     code: item.code,
     title: item.title,
     image: item.image,
+    pinIconImage: item.pinIconImage,
     color: item.color,
     displayOrder: item.displayOrder,
     isActive: item.isActive,
@@ -51,11 +53,35 @@ function chooseFallbackDescription(translations, fallback) {
   return translations?.find((item) => item.description)?.description ?? fallback ?? null;
 }
 
+async function assertParentServiceType(parentId, currentId = null) {
+  if (!parentId) return;
+  const numericParentId = Number(parentId);
+  const numericCurrentId = currentId ? Number(currentId) : null;
+  if (numericCurrentId && numericParentId === numericCurrentId) {
+    throw new AppError(400, 'VALIDATION_ERROR', 'Validation failed', { errors: [{ path: 'parentId', message: 'A service type cannot be its own parent' }] });
+  }
+  const parent = await prisma.serviceType.findUnique({ where: { id: numericParentId }, select: { id: true, parentId: true } });
+  if (!parent) {
+    throw new AppError(400, 'VALIDATION_ERROR', 'Validation failed', { errors: [{ path: 'parentId', message: 'Parent service type not found' }] });
+  }
+  if (parent.parentId) {
+    throw new AppError(400, 'VALIDATION_ERROR', 'Validation failed', { errors: [{ path: 'parentId', message: 'Parent service type must be top-level' }] });
+  }
+  if (numericCurrentId) {
+    const childCount = await prisma.serviceType.count({ where: { parentId: numericCurrentId } });
+    if (childCount > 0) {
+      throw new AppError(400, 'VALIDATION_ERROR', 'Validation failed', { errors: [{ path: 'parentId', message: 'A service type with children cannot become a child' }] });
+    }
+  }
+}
+
 async function listServiceTypes(query, lang) {
   const selectedLang = await resolveSelectedLang(query.lang || lang);
   const skip = (query.page - 1) * query.pageSize;
   const where = {};
 
+  if (query.rootOnly) where.parentId = null;
+  else if (query.parentId !== undefined && query.parentId !== null) where.parentId = query.parentId;
   if (query.isActive !== undefined) where.isActive = query.isActive;
   if (query.q) {
     where.OR = [
@@ -73,6 +99,14 @@ async function listServiceTypes(query, lang) {
       take: query.pageSize,
       orderBy: [{ [query.sortBy]: query.sortDir }, { id: 'asc' }],
       include: {
+        parent: {
+          select: {
+            id: true,
+            code: true,
+            title: true,
+            translations: { where: { lang: selectedLang }, take: 1 },
+          },
+        },
         translations: {
           where: { lang: selectedLang },
           take: 1,
@@ -81,6 +115,7 @@ async function listServiceTypes(query, lang) {
           select: {
             attributeGroups: true,
             businesses: true,
+            children: true,
           },
         },
       },
@@ -93,6 +128,11 @@ async function listServiceTypes(query, lang) {
       const selectedTranslation = item.translations[0] || null;
       return {
         ...item,
+        parent: item.parent ? {
+          id: item.parent.id,
+          code: item.parent.code,
+          title: item.parent.translations?.[0]?.title || item.parent.title,
+        } : null,
         selectedTranslation,
         title: selectedTranslation?.title || item.title,
         description: selectedTranslation?.description ?? item.description,
@@ -120,6 +160,7 @@ async function getServiceTypeById(id) {
         select: {
           attributeGroups: true,
           businesses: true,
+          children: true,
         },
       },
     },
@@ -130,6 +171,7 @@ async function getServiceTypeById(id) {
 
 async function createServiceType(data, req) {
   const { core, translations } = splitData(data);
+  await assertParentServiceType(core.parentId);
   await assertLanguages([...new Set(translations.map((item) => item.lang))]);
   const created = await prisma.serviceType.create({
     data: {
@@ -149,6 +191,7 @@ async function updateServiceType(id, data, req) {
   if (!existing) throw new AppError(404, 'NOT_FOUND', 'Service type not found');
 
   const { core, translations } = splitData(data);
+  if (Object.prototype.hasOwnProperty.call(core, 'parentId')) await assertParentServiceType(core.parentId, id);
   if (translations) await assertLanguages([...new Set(translations.map((item) => item.lang))]);
 
   const updated = await prisma.$transaction(async (tx) => {
@@ -187,11 +230,17 @@ async function updateServiceType(id, data, req) {
 async function deleteServiceType(id, req) {
   const existing = await prisma.serviceType.findUnique({
     where: { id },
-    include: { _count: { select: { businesses: true, attributeGroups: true } } },
+    include: { _count: { select: { businesses: true, attributeGroups: true, children: true } } },
   });
   if (!existing) throw new AppError(404, 'NOT_FOUND', 'Service type not found');
+  if (existing._count.children > 0) {
+    throw new AppError(409, 'SERVICE_TYPE_HAS_CHILDREN', 'Service type has children and cannot be deleted');
+  }
   if (existing._count.businesses > 0) {
     throw new AppError(409, 'SERVICE_TYPE_IN_USE', 'Service type has businesses and cannot be deleted');
+  }
+  if (existing._count.attributeGroups > 0) {
+    throw new AppError(409, 'SERVICE_TYPE_HAS_ATTRIBUTE_GROUPS', 'Service type has attribute groups and cannot be deleted');
   }
 
   await prisma.serviceType.delete({ where: { id } });

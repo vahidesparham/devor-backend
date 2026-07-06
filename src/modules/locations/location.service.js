@@ -80,6 +80,8 @@ function normalize(item) {
     title: item.title,
     phoneCode: item.phoneCode,
     flagImage: item.flagImage,
+    latitude: item.latitude,
+    longitude: item.longitude,
     displayOrder: item.displayOrder,
     isActive: item.isActive,
   };

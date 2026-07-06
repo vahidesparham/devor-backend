@@ -4,7 +4,7 @@ const { audit } = require('../../shared/audit/audit');
 const SINGLETON_ID = 1;
 const DEFAULT_SETTINGS = {
   id: SINGLETON_ID,
-  panelTitle: 'Atlas Console',
+  panelTitle: 'Devor',
   panelLogo: null,
   panelFavicon: null,
 };

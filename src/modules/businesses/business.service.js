@@ -16,11 +16,12 @@ async function assertLanguages(codes) {
 }
 
 async function assertBusinessRelations(serviceTypeId, attributeOptionIds, attributeValues = []) {
-  const serviceType = await prisma.serviceType.findUnique({ where: { id: serviceTypeId }, select: { id: true } });
+  const serviceType = await prisma.serviceType.findUnique({ where: { id: serviceTypeId }, select: { id: true, parentId: true } });
   if (!serviceType) throw new AppError(400, 'VALIDATION_ERROR', 'Validation failed', { errors: [{ path: 'serviceTypeId', message: 'Service type not found' }] });
+  const attributeServiceTypeId = serviceType.parentId || serviceType.id;
 
   const groups = await prisma.attributeGroup.findMany({
-    where: { serviceTypeId },
+    where: { serviceTypeId: attributeServiceTypeId },
     include: { options: { select: { id: true } } },
   });
   const groupsById = new Map(groups.map((group) => [group.id, group]));

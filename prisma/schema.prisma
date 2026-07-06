@@ -212,7 +212,7 @@ model ImageConfig {
 
 model PanelSetting {
   id           Int      @id
-  panelTitle   String   @default("Atlas Console") @db.VarChar(120)
+  panelTitle   String   @default("Devor") @db.VarChar(120)
   panelLogo    String?  @db.VarChar(500)
   panelFavicon String?  @db.VarChar(500)
   createdAt    DateTime @default(now())
@@ -535,20 +535,25 @@ model BannerTranslation {
 
 model ServiceType {
   id              Int                      @id @default(autoincrement())
+  parentId        Int?
   code            String                   @unique @db.VarChar(80)
   title           String                   @db.VarChar(160)
   image           String?                  @db.VarChar(500)
+  pinIconImage    String?                  @db.VarChar(500)
   color           String?                  @db.VarChar(30)
   description     String?                  @db.VarChar(500)
   displayOrder    Int                      @default(0)
   isActive        Boolean                  @default(true)
   createdAt       DateTime                 @default(now())
   updatedAt       DateTime                 @updatedAt
+  parent          ServiceType?             @relation("ServiceTypeHierarchy", fields: [parentId], references: [id], onDelete: SetNull)
+  children        ServiceType[]            @relation("ServiceTypeHierarchy")
   translations    ServiceTypeTranslation[]
   attributeGroups AttributeGroup[]
   businesses      Business[]
 
   @@index([isActive, displayOrder])
+  @@index([parentId, isActive, displayOrder])
 }
 
 model ServiceTypeTranslation {
@@ -578,6 +583,7 @@ model AttributeGroup {
   selectionMode AttributeSelectionMode      @default(MULTIPLE)
   unit          String?                     @db.VarChar(60)
   isRequired    Boolean                     @default(false)
+  showInFilters Boolean                     @default(false)
   displayOrder  Int                         @default(0)
   isActive      Boolean                     @default(true)
   createdAt     DateTime                    @default(now())
@@ -589,6 +595,7 @@ model AttributeGroup {
 
   @@unique([serviceTypeId, code])
   @@index([serviceTypeId, isActive, displayOrder])
+  @@index([serviceTypeId, showInFilters, isActive, displayOrder], map: "AttrGroup_filter_idx")
 }
 
 model AttributeGroupTranslation {
@@ -680,6 +687,8 @@ model City {
   countryId    Int
   code         String            @db.VarChar(120)
   title        String            @db.VarChar(160)
+  latitude     Decimal?          @db.Decimal(10, 7)
+  longitude    Decimal?          @db.Decimal(10, 7)
   displayOrder Int               @default(0)
   isActive     Boolean           @default(true)
   createdAt    DateTime          @default(now())
@@ -785,6 +794,8 @@ model Business {
   businessRoles       BusinessRole[]
   offeringCategories  BusinessOfferingCategory[]
   offerings           BusinessOffering[]
+  reviews             BusinessReview[]
+  appFavorites        AppFavoriteBusiness[]
 
   @@index([serviceTypeId, isActive, displayOrder])
   @@index([countryId])
@@ -1048,6 +1059,22 @@ model BusinessOfferingOptionTranslation {
   @@index([lang, isActive])
 }
 
+model BusinessReview {
+  id         Int      @id @default(autoincrement())
+  businessId Int
+  appUserId  Int
+  rating     Decimal  @db.Decimal(3, 2)
+  comment    String?  @db.Text
+  isActive   Boolean  @default(true)
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+  business   Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  appUser    AppUser  @relation(fields: [appUserId], references: [id], onDelete: Cascade)
+
+  @@index([businessId, isActive, createdAt])
+  @@index([appUserId, createdAt])
+}
+
 model BusinessUser {
   id            Int                    @id @default(autoincrement())
   email         String                 @unique @db.VarChar(191)
@@ -1085,21 +1112,35 @@ model BusinessRefreshToken {
 }
 
 model AppUser {
-  id            Int               @id @default(autoincrement())
-  phone         String            @unique @db.VarChar(80)
-  countryCode   String?           @db.VarChar(10)
-  phoneCode     String?           @db.VarChar(20)
-  avatar        String?           @db.VarChar(500)
-  email         String?           @unique @db.VarChar(191)
-  firstName     String?           @db.VarChar(100)
-  lastName      String?           @db.VarChar(100)
-  isActive      Boolean           @default(true)
-  createdAt     DateTime          @default(now())
-  updatedAt     DateTime          @updatedAt
-  refreshTokens AppRefreshToken[]
+  id              Int               @id @default(autoincrement())
+  phone           String            @unique @db.VarChar(80)
+  countryCode     String?           @db.VarChar(10)
+  phoneCode       String?           @db.VarChar(20)
+  avatar          String?           @db.VarChar(500)
+  email           String?           @unique @db.VarChar(191)
+  firstName       String?           @db.VarChar(100)
+  lastName        String?           @db.VarChar(100)
+  isActive        Boolean           @default(true)
+  createdAt       DateTime          @default(now())
+  updatedAt       DateTime          @updatedAt
+  refreshTokens   AppRefreshToken[]
+  businessReviews BusinessReview[]
+  favoriteBusinesses AppFavoriteBusiness[]
 
   @@index([countryCode])
   @@index([isActive])
+}
+
+model AppFavoriteBusiness {
+  id         Int      @id @default(autoincrement())
+  appUserId  Int
+  businessId Int
+  createdAt  DateTime @default(now())
+  appUser    AppUser  @relation(fields: [appUserId], references: [id], onDelete: Cascade)
+  business   Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+
+  @@unique([appUserId, businessId])
+  @@index([businessId])
 }
 
 model AppOtpChallenge {

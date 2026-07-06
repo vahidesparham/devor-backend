@@ -5,6 +5,8 @@ const keySchema = z.string().trim().toLowerCase().min(2).max(120).regex(/^[a-z0-
 const countryCodeSchema = z.string().trim().toUpperCase().min(2).max(10).regex(/^[A-Z]{2,10}$/);
 const phoneCodeSchema = z.string().trim().min(1).max(20).regex(/^\+[0-9]{1,6}$/);
 const nullableString = (max) => z.preprocess((val) => (val === '' ? null : val), z.string().trim().max(max).nullable().optional());
+const nullableLatitude = z.preprocess((val) => (val === '' ? null : val), z.coerce.number().min(-90).max(90).nullable().optional());
+const nullableLongitude = z.preprocess((val) => (val === '' ? null : val), z.coerce.number().min(-180).max(180).nullable().optional());
 
 const translationSchema = z.object({
   lang: langCodeSchema,
@@ -32,6 +34,8 @@ const baseCountryBodySchema = z.object({
 const baseCityBodySchema = z.object({
   countryId: z.coerce.number().int().positive(),
   code: keySchema,
+  latitude: nullableLatitude,
+  longitude: nullableLongitude,
   displayOrder: z.coerce.number().int().min(0).optional().default(0),
   isActive: z.boolean().optional().default(true),
   translations: z.array(translationSchema).min(1),

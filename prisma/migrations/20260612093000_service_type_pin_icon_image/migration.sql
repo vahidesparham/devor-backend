@@ -1,0 +1,1 @@
+ALTER TABLE `ServiceType` ADD COLUMN `pinIconImage` VARCHAR(500) NULL;
