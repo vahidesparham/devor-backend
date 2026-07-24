@@ -119,12 +119,21 @@ test('classified admin API moderates ads and reports with versions, history, and
 
     const primaryAd = await createPendingAd('MP', 'Primary moderation ad');
     const rejectedAd = await createPendingAd('MR', 'Rejected moderation ad');
+    const auditFailureAd = await createPendingAd('MA', 'Atomic audit rollback ad');
     const report = await prisma.classifiedReport.create({
       data: {
         adId: primaryAd.id,
         reporterAppUserId: owner.id,
         reasonCode: 'SUSPICIOUS',
         description: 'Please review this classified ad.',
+      },
+    });
+    const auditFailureReport = await prisma.classifiedReport.create({
+      data: {
+        adId: auditFailureAd.id,
+        reporterAppUserId: owner.id,
+        reasonCode: 'AUDIT_ROLLBACK',
+        description: 'This report verifies atomic audit rollback.',
       },
     });
 
@@ -166,6 +175,35 @@ test('classified admin API moderates ads and reports with versions, history, and
     assert.equal(detailResult.status, 200);
     assert.equal(detailResult.payload.data.readiness.ready, true);
     assert.equal(detailResult.payload.data.reports.length, 1);
+
+    const oversizedAuditQuery = `?auditPathPadding=${'x'.repeat(300)}`;
+    const failedAuditModeration = await request(
+      `/classified-ads/${auditFailureAd.id}/actions/approve${oversizedAuditQuery}`,
+      {
+        method: 'POST',
+        body: { expectedVersion: 1 },
+      },
+    );
+    assert.equal(failedAuditModeration.status, 500);
+    const moderationAfterAuditFailure = await prisma.classifiedAd.findUnique({
+      where: { id: auditFailureAd.id },
+      select: { status: true, version: true },
+    });
+    assert.deepEqual(moderationAfterAuditFailure, { status: 'PENDING_REVIEW', version: 1 });
+
+    const failedAuditReport = await request(
+      `/classified-reports/${auditFailureReport.id}/actions/review${oversizedAuditQuery}`,
+      {
+        method: 'POST',
+        body: { expectedVersion: 1, note: 'Atomic audit test' },
+      },
+    );
+    assert.equal(failedAuditReport.status, 500);
+    const reportAfterAuditFailure = await prisma.classifiedReport.findUnique({
+      where: { id: auditFailureReport.id },
+      select: { status: true, version: true },
+    });
+    assert.deepEqual(reportAfterAuditFailure, { status: 'OPEN', version: 1 });
 
     const approveResult = await request(`/classified-ads/${primaryAd.id}/actions/approve`, {
       method: 'POST',

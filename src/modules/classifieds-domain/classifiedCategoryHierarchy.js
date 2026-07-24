@@ -84,7 +84,9 @@ function assertValidCategoryParent(rows, categoryId, parentId) {
 function isCategoryPubliclySelectable(rows, categoryId) {
   const path = getCategoryPath(rows, categoryId);
   if (!path.length) return false;
-  return path.every((category) => category.isActive) && path[path.length - 1].allowAds === true;
+  const selected = path[path.length - 1];
+  const hasChildren = (rows || []).some((category) => Number(category.parentId) === Number(selected.id));
+  return path.every((category) => category.isActive) && selected.allowAds === true && !hasChildren;
 }
 
 function resolveInheritedClassifiedAttributes(categoryRows, attributeRows, categoryId) {

@@ -138,6 +138,22 @@ test('private classified API enforces ownership, typed data, images, versions, a
     assert.equal(metadataResult.payload.data.category.postingFee, 1000);
     assert.equal(metadataResult.payload.data.category.postingFeeCurrency, 'TJS');
 
+    const parentMetadataResult = await request(`/categories/${root.id}/attributes`);
+    assert.equal(parentMetadataResult.status, 409);
+    assert.equal(parentMetadataResult.payload.code, 'CLASSIFIED_CATEGORY_NOT_SELECTABLE');
+
+    const parentDraftResult = await request('/my-ads', {
+      method: 'POST',
+      body: {
+        categoryId: root.id,
+        countryId: country.id,
+        cityId: city.id,
+        areaId: area.id,
+      },
+    });
+    assert.equal(parentDraftResult.status, 409);
+    assert.equal(parentDraftResult.payload.code, 'CLASSIFIED_CATEGORY_NOT_SELECTABLE');
+
     const ownerInjectionResult = await request('/my-ads', {
       method: 'POST',
       body: {

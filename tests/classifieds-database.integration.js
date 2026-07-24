@@ -70,9 +70,16 @@ test('classified database rejects unsafe settings', async () => {
       data: { publicationDays: 0 },
     }),
   );
+  await assert.rejects(
+    prisma.classifiedSetting.update({
+      where: { id: 1 },
+      data: { maxImagesPerAd: 101 },
+    }),
+  );
 
   const settings = await prisma.classifiedSetting.findUnique({ where: { id: 1 } });
   assert.equal(settings.publicationDays, 30);
+  assert.equal(settings.maxImagesPerAd, 10);
 });
 
 test('classified taxonomy services enforce hierarchy and inherited attribute contracts', async () => {

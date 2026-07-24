@@ -7,6 +7,18 @@ const {
 } = require('../classifieds-domain/classifiedCategoryHierarchy');
 
 const SELECT_TYPES = new Set(['SELECT', 'MULTI_SELECT']);
+const OPERATIONAL_AD_STATUSES = ['PENDING_REVIEW', 'PUBLISHED', 'PAUSED', 'SUSPENDED'];
+const ATTRIBUTE_CONTRACT_FIELDS = [
+  'categoryId',
+  'code',
+  'type',
+  'isRequired',
+  'isActive',
+  'minValue',
+  'maxValue',
+  'minLength',
+  'maxLength',
+];
 
 function normalizeAttribute(item) {
   return {
@@ -124,6 +136,41 @@ async function assertCategory(categoryId) {
     });
   }
   return category;
+}
+
+function comparableValue(value) {
+  return value == null ? null : String(value);
+}
+
+function hasAttributeContractChanges(existing, changes) {
+  return ATTRIBUTE_CONTRACT_FIELDS.some((field) => (
+    Object.prototype.hasOwnProperty.call(changes, field)
+    && comparableValue(changes[field]) !== comparableValue(existing[field])
+  ));
+}
+
+async function assertNoOperationalAdsInAttributeScopes(categoryIds, code, message) {
+  const categoryRows = await getCategoryRows();
+  const affectedIds = new Set();
+  for (const categoryId of categoryIds.filter(Boolean)) {
+    for (const id of collectDescendantCategoryIds(categoryRows, categoryId)) {
+      affectedIds.add(id);
+    }
+  }
+  if (!affectedIds.size) return;
+
+  const count = await prisma.classifiedAd.count({
+    where: {
+      categoryId: { in: [...affectedIds] },
+      status: { in: OPERATIONAL_AD_STATUSES },
+      deletedAt: null,
+    },
+  });
+  if (count > 0) {
+    throw new AppError(409, code, message, {
+      details: { operationalAdCount: count },
+    });
+  }
 }
 
 function cleanConstraints(data, effectiveType) {
@@ -294,6 +341,13 @@ async function createClassifiedAttribute(data, req) {
   await assertCategory(attributeData.categoryId);
   await assertUniqueCode(attributeData.categoryId, attributeData.code);
   await assertCompatibleInheritance(attributeData);
+  if (attributeData.isActive !== false) {
+    await assertNoOperationalAdsInAttributeScopes(
+      [attributeData.categoryId],
+      'CLASSIFIED_ATTRIBUTE_OPERATIONAL_ADS',
+      'An active attribute cannot be added while its category branch has operational ads',
+    );
+  }
   const prepared = cleanConstraints(attributeData, attributeData.type);
   const created = await prisma.classifiedAttribute.create({
     data: {
@@ -337,8 +391,23 @@ async function updateClassifiedAttribute(id, data, req) {
     currentId: id,
   });
 
-  if (nextType !== existing.type && existing._count.values > 0) {
-    throw new AppError(409, 'CLASSIFIED_ATTRIBUTE_IN_USE', 'The type of an attribute used by ads cannot be changed');
+  const identityChanged = ['categoryId', 'code', 'type'].some((field) => (
+    Object.prototype.hasOwnProperty.call(attributeData, field)
+    && comparableValue(attributeData[field]) !== comparableValue(existing[field])
+  ));
+  if (identityChanged && existing._count.values > 0) {
+    throw new AppError(
+      409,
+      'CLASSIFIED_ATTRIBUTE_IN_USE',
+      'The category, code, or type of an attribute used by ads cannot be changed',
+    );
+  }
+  if (hasAttributeContractChanges(existing, attributeData)) {
+    await assertNoOperationalAdsInAttributeScopes(
+      [existing.categoryId, nextCategoryId],
+      'CLASSIFIED_ATTRIBUTE_OPERATIONAL_ADS',
+      'The validation contract cannot change while the affected category branch has operational ads',
+    );
   }
   if (!SELECT_TYPES.has(nextType) && existing._count.options > 0 && !optionsProvided) {
     throw new AppError(409, 'CLASSIFIED_ATTRIBUTE_HAS_OPTIONS', 'Remove the attribute options before changing to a non-selection type');
@@ -371,6 +440,24 @@ async function updateClassifiedAttribute(id, data, req) {
     throw new AppError(409, 'CLASSIFIED_ATTRIBUTE_OPTION_IN_USE', 'An option used by ads cannot be deleted', {
       errors: [{ path: 'options', message: `The option "${usedRemovedOption.title}" is used by ads and cannot be removed` }],
     });
+  }
+  if (optionsProvided) {
+    const unsafeOption = options.find((option) => {
+      if (!option.id) return false;
+      const before = existingOptionsById.get(option.id);
+      if (!before || before._count.values === 0) return false;
+      return before.code !== option.code || before.isActive !== option.isActive;
+    });
+    if (unsafeOption) {
+      throw new AppError(
+        409,
+        'CLASSIFIED_ATTRIBUTE_OPTION_IN_USE',
+        'The code or active state of an option used by ads cannot be changed',
+        {
+          errors: [{ path: 'options', message: `The option "${unsafeOption.title}" is used by ads` }],
+        },
+      );
+    }
   }
 
   const prepared = cleanConstraints(attributeData, nextType);
@@ -434,6 +521,13 @@ async function deleteClassifiedAttribute(id, req) {
   if (!existing) throw new AppError(404, 'NOT_FOUND', 'Classified attribute not found');
   if (existing._count.values > 0) {
     throw new AppError(409, 'CLASSIFIED_ATTRIBUTE_IN_USE', 'An attribute used by ads cannot be deleted');
+  }
+  if (existing.isActive) {
+    await assertNoOperationalAdsInAttributeScopes(
+      [existing.categoryId],
+      'CLASSIFIED_ATTRIBUTE_OPERATIONAL_ADS',
+      'An active attribute cannot be deleted while its category branch has operational ads',
+    );
   }
   await prisma.classifiedAttribute.delete({ where: { id } });
   await audit(req, {
@@ -515,6 +609,17 @@ async function updateClassifiedAttributeOption(attributeId, optionId, data, req)
   const existing = await getClassifiedAttributeOption(attributeId, optionId);
   await assertSelectionAttribute(attributeId);
   await assertUniqueOptionCode(attributeId, data.code, optionId);
+  const changesUsedContract = existing._count.values > 0 && (
+    (Object.prototype.hasOwnProperty.call(data, 'code') && data.code !== existing.code)
+    || (Object.prototype.hasOwnProperty.call(data, 'isActive') && data.isActive !== existing.isActive)
+  );
+  if (changesUsedContract) {
+    throw new AppError(
+      409,
+      'CLASSIFIED_ATTRIBUTE_OPTION_IN_USE',
+      'The code or active state of an option used by ads cannot be changed',
+    );
+  }
   const updated = await prisma.classifiedAttributeOption.update({
     where: { id: optionId },
     data,

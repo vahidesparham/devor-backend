@@ -48,6 +48,15 @@ test('classified category hierarchy resolves descendants and root-first paths', 
   assert.equal(isCategoryPubliclySelectable(categories, 4), false);
 });
 
+test('classified category selection always requires a leaf category', () => {
+  const rows = [
+    ...categories,
+    { id: 5, parentId: 3, title: 'Sedan', isActive: true, allowAds: true },
+  ];
+  assert.equal(isCategoryPubliclySelectable(rows, 3), false);
+  assert.equal(isCategoryPubliclySelectable(rows, 5), true);
+});
+
 test('classified category hierarchy rejects self and descendant parents', () => {
   assert.equal(wouldCreateCategoryCycle(categories, 2, 2), true);
   assert.equal(wouldCreateCategoryCycle(categories, 2, 3), true);
@@ -123,6 +132,7 @@ test('classified lifecycle allows explicit transitions and rejects shortcuts', (
   assert.equal(canTransitionClassified(STATUSES.DRAFT, STATUSES.PENDING_REVIEW), true);
   assert.equal(canTransitionClassified(STATUSES.DRAFT, STATUSES.PUBLISHED), false);
   assert.doesNotThrow(() => assertClassifiedTransition(STATUSES.PUBLISHED, STATUSES.SOLD));
+  assert.doesNotThrow(() => assertClassifiedTransition(STATUSES.SUSPENDED, STATUSES.EXPIRED));
   assert.throws(() => assertClassifiedTransition(STATUSES.ARCHIVED, STATUSES.PUBLISHED), {
     code: 'CLASSIFIED_TRANSITION_NOT_ALLOWED',
   });
@@ -240,9 +250,20 @@ test('classified readiness rejects rows that mix typed value representations', (
 test('classified settings validation catches unsafe limits', () => {
   assert.deepEqual(validateClassifiedSettings(DEFAULT_CLASSIFIED_SETTINGS), []);
   const issues = validateClassifiedSettings({
-    minImagesPerAd: 5,
-    maxImagesPerAd: 2,
+    minImagesPerAd: 102,
+    maxImagesPerAd: 101,
+    maxTitleLength: 121,
+    maxDescriptionLength: 10001,
     publicationDays: 0,
   });
-  assert.deepEqual(new Set(issues.map((item) => item.field)), new Set(['publicationDays', 'minImagesPerAd']));
+  assert.deepEqual(
+    new Set(issues.map((item) => item.field)),
+    new Set([
+      'publicationDays',
+      'minImagesPerAd',
+      'maxImagesPerAd',
+      'maxTitleLength',
+      'maxDescriptionLength',
+    ]),
+  );
 });

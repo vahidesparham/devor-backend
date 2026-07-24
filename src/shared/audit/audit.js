@@ -1,14 +1,14 @@
 const prisma = require("../../prisma");
 const { redactValue } = require("../utils/sanitize");
 
-async function audit(req, payload) {
+async function audit(req, payload, db = prisma) {
     if (payload.action === "REFRESH") {
         return;
     }
 
     const adminId = req.admin ? req.admin.id : null;
 
-    await prisma.auditLog.create({
+    await db.auditLog.create({
         data: {
             traceId: req.traceId || null,
             adminId,

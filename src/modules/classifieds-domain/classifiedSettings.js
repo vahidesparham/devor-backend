@@ -1,4 +1,9 @@
 const CLASSIFIED_SETTINGS_ID = 1;
+const CLASSIFIED_SETTING_LIMITS = Object.freeze({
+  maxImagesPerAd: 100,
+  maxTitleLength: 120,
+  maxDescriptionLength: 10000,
+});
 
 const DEFAULT_CLASSIFIED_SETTINGS = Object.freeze({
   id: CLASSIFIED_SETTINGS_ID,
@@ -45,6 +50,11 @@ function validateClassifiedSettings(settings) {
   if (merged.minImagesPerAd > merged.maxImagesPerAd) {
     issues.push({ field: 'minImagesPerAd', message: 'minImagesPerAd cannot exceed maxImagesPerAd' });
   }
+  for (const [field, maximum] of Object.entries(CLASSIFIED_SETTING_LIMITS)) {
+    if (Number.isInteger(merged[field]) && merged[field] > maximum) {
+      issues.push({ field, message: `${field} cannot exceed ${maximum}` });
+    }
+  }
 
   if (!String(merged.contentLanguage || '').trim()) {
     issues.push({ field: 'contentLanguage', message: 'contentLanguage is required' });
@@ -59,6 +69,7 @@ function validateClassifiedSettings(settings) {
 
 module.exports = {
   CLASSIFIED_SETTINGS_ID,
+  CLASSIFIED_SETTING_LIMITS,
   DEFAULT_CLASSIFIED_SETTINGS,
   validateClassifiedSettings,
 };

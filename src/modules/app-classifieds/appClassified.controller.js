@@ -6,6 +6,20 @@ async function postingConfig(req, res) {
   return ok(res, { code: 'CLASSIFIED_POSTING_CONFIG_SUCCESS', data });
 }
 
+async function publicCategories(_req, res) {
+  const data = await service.listPublicCategories();
+  return ok(res, { code: 'CLASSIFIED_PUBLIC_CATEGORIES_SUCCESS', data });
+}
+
+async function publicAds(req, res) {
+  const result = await service.listPublicAds(req.query);
+  return ok(res, {
+    code: 'CLASSIFIED_PUBLIC_AD_LIST_SUCCESS',
+    data: result.items,
+    meta: result.meta,
+  });
+}
+
 async function categoryAttributes(req, res) {
   const data = await service.getCategoryAttributes(req.params.categoryId);
   return ok(res, { code: 'CLASSIFIED_CATEGORY_ATTRIBUTES_SUCCESS', data });
@@ -78,6 +92,8 @@ module.exports = {
   markSold: action('markMyAdSold', 'CLASSIFIED_MARK_SOLD_SUCCESS'),
   pause: action('pauseMyAd', 'CLASSIFIED_PAUSE_SUCCESS'),
   postingConfig,
+  publicAds,
+  publicCategories,
   readiness,
   renew: action('renewMyAd', 'CLASSIFIED_RENEW_SUCCESS'),
   reorderImages,

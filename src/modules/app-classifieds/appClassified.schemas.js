@@ -104,6 +104,13 @@ const listMyAdsSchema = z.object({
   sortDir: z.enum(['asc', 'desc']).optional().default('desc'),
 });
 
+const publicAdListSchema = z.object({
+  page: z.coerce.number().int().min(1).optional().default(1),
+  pageSize: z.coerce.number().int().min(1).max(50).optional().default(20),
+  categoryId: z.coerce.number().int().positive().optional(),
+  cityId: z.coerce.number().int().positive().optional(),
+});
+
 const attributeValueSchema = z.object({
   attributeId: z.coerce.number().int().positive(),
   optionIds: z.array(z.coerce.number().int().positive()).max(100).optional(),
@@ -161,6 +168,7 @@ module.exports = {
   imageParamSchema,
   imageUploadBodySchema,
   listMyAdsSchema,
+  publicAdListSchema,
   reorderImagesSchema,
   saveAttributeValuesSchema,
   updateAdSchema,

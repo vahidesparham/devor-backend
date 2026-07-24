@@ -159,6 +159,100 @@ function mapSummary(ad) {
   };
 }
 
+function mapPublicSummary(ad) {
+  return {
+    id: ad.id,
+    publicCode: ad.publicCode,
+    title: ad.title,
+    priceType: ad.priceType,
+    price: toNumber(ad.price),
+    currency: ad.currency,
+    category: mapCategory(ad.category),
+    city: ad.city ? { id: ad.city.id, title: ad.city.title } : null,
+    area: ad.area ? { id: ad.area.id, title: ad.area.title } : null,
+    coverImage: ad.images?.[0] ? mapImage(ad.images[0]) : null,
+    publishedAt: ad.publishedAt,
+    viewCount: ad.viewCount,
+    favoriteCount: ad.favoriteCount,
+  };
+}
+
+async function listPublicCategories() {
+  const rows = await prisma.classifiedCategory.findMany({
+    where: { parentId: null, isActive: true },
+    orderBy: [{ displayOrder: 'asc' }, { id: 'asc' }],
+  });
+  return rows.map((category) => mapCategory(category));
+}
+
+async function getPublicCategoryIds(categoryId) {
+  const rows = await prisma.classifiedCategory.findMany({
+    where: { isActive: true },
+    select: { id: true, parentId: true },
+  });
+  if (!rows.some((row) => row.id === categoryId)) {
+    throw new AppError(404, 'CLASSIFIED_CATEGORY_NOT_FOUND', 'Classified category not found');
+  }
+
+  const categoryIds = new Set([categoryId]);
+  let foundChild = true;
+  while (foundChild) {
+    foundChild = false;
+    for (const row of rows) {
+      if (row.parentId != null && categoryIds.has(row.parentId) && !categoryIds.has(row.id)) {
+        categoryIds.add(row.id);
+        foundChild = true;
+      }
+    }
+  }
+  return [...categoryIds];
+}
+
+async function listPublicAds(query) {
+  const now = new Date();
+  const where = {
+    status: STATUSES.PUBLISHED,
+    deletedAt: null,
+    publishedAt: { not: null },
+    OR: [{ expiresAt: null }, { expiresAt: { gt: now } }],
+  };
+  if (query.cityId) where.cityId = query.cityId;
+  if (query.categoryId) {
+    where.categoryId = { in: await getPublicCategoryIds(query.categoryId) };
+  }
+
+  const skip = (query.page - 1) * query.pageSize;
+  const [items, total] = await Promise.all([
+    prisma.classifiedAd.findMany({
+      where,
+      skip,
+      take: query.pageSize,
+      orderBy: [{ publishedAt: 'desc' }, { id: 'desc' }],
+      include: {
+        category: true,
+        city: { select: { id: true, title: true } },
+        area: { select: { id: true, title: true } },
+        images: {
+          orderBy: [{ isCover: 'desc' }, { displayOrder: 'asc' }, { id: 'asc' }],
+          take: 1,
+        },
+      },
+    }),
+    prisma.classifiedAd.count({ where }),
+  ]);
+
+  return {
+    items: items.map(mapPublicSummary),
+    meta: {
+      page: query.page,
+      pageSize: query.pageSize,
+      total,
+      pageCount: Math.ceil(total / query.pageSize),
+      hasNext: skip + items.length < total,
+    },
+  };
+}
+
 function mapDetail(ad, resolvedAttributes = null) {
   return {
     ...mapSummary(ad),
@@ -431,8 +525,20 @@ async function buildReadiness(ad, overrides = {}) {
   };
 }
 
-async function ensureActiveLimit(appUserId, settings, excludeId = null) {
-  const count = await prisma.classifiedAd.count({
+async function lockAppUserClassifiedQuota(tx, appUserId) {
+  const rows = await tx.$queryRaw`
+    SELECT id
+    FROM AppUser
+    WHERE id = ${Number(appUserId)}
+    FOR UPDATE
+  `;
+  if (!rows.length) {
+    throw new AppError(404, 'APP_USER_NOT_FOUND', 'App user not found');
+  }
+}
+
+async function ensureActiveLimit(appUserId, settings, excludeId = null, db = prisma) {
+  const count = await db.classifiedAd.count({
     where: {
       ownerType: 'APP_USER',
       appUserId,
@@ -556,20 +662,6 @@ async function getMyAd(appUser, id) {
 
 async function createDraft(appUser, data) {
   const settings = await getSettings();
-  const draftCount = await prisma.classifiedAd.count({
-    where: {
-      ownerType: 'APP_USER',
-      appUserId: appUser.id,
-      status: { in: DRAFT_LIMIT_STATUSES },
-      deletedAt: null,
-    },
-  });
-  if (draftCount >= settings.maxDraftAdsPerAppUser) {
-    throw new AppError(409, 'CLASSIFIED_DRAFT_LIMIT_REACHED', 'Draft classified ad limit reached', {
-      details: { limit: settings.maxDraftAdsPerAppUser, current: draftCount },
-    });
-  }
-
   await Promise.all([
     getSelectableCategory(data.categoryId),
     assertLocation(data.countryId, data.cityId, data.areaId),
@@ -580,39 +672,56 @@ async function createDraft(appUser, data) {
   assertContactSettings({ allowPhone, allowChat }, settings);
   const price = normalizePrice(data.priceType, data.price);
   const publicCode = await nextPublicCode();
-  const created = await prisma.classifiedAd.create({
-    data: {
-      publicCode,
-      categoryId: data.categoryId,
-      ownerType: 'APP_USER',
-      appUserId: appUser.id,
-      businessId: null,
-      countryId: data.countryId,
-      cityId: data.cityId,
-      areaId: data.areaId,
-      title: data.title || '',
-      description: data.description || '',
-      priceType: data.priceType,
-      price,
-      currency: settings.currency,
-      contactName: data.contactName,
-      contactPhone: data.contactPhone || appUser.phone,
-      allowPhone,
-      allowChat,
-      latitude: data.latitude,
-      longitude: data.longitude,
-      locationPrecision: data.locationPrecision,
-      statusHistory: {
-        create: {
-          fromStatus: null,
-          toStatus: STATUSES.DRAFT,
-          actorType: 'APP_USER',
-          actorId: String(appUser.id),
-          reasonCode: 'OWNER_CREATED_DRAFT',
+  const created = await prisma.$transaction(async (tx) => {
+    await lockAppUserClassifiedQuota(tx, appUser.id);
+    const draftCount = await tx.classifiedAd.count({
+      where: {
+        ownerType: 'APP_USER',
+        appUserId: appUser.id,
+        status: { in: DRAFT_LIMIT_STATUSES },
+        deletedAt: null,
+      },
+    });
+    if (draftCount >= settings.maxDraftAdsPerAppUser) {
+      throw new AppError(409, 'CLASSIFIED_DRAFT_LIMIT_REACHED', 'Draft classified ad limit reached', {
+        details: { limit: settings.maxDraftAdsPerAppUser, current: draftCount },
+      });
+    }
+
+    return tx.classifiedAd.create({
+      data: {
+        publicCode,
+        categoryId: data.categoryId,
+        ownerType: 'APP_USER',
+        appUserId: appUser.id,
+        businessId: null,
+        countryId: data.countryId,
+        cityId: data.cityId,
+        areaId: data.areaId,
+        title: data.title || '',
+        description: data.description || '',
+        priceType: data.priceType,
+        price,
+        currency: settings.currency,
+        contactName: data.contactName,
+        contactPhone: data.contactPhone || appUser.phone,
+        allowPhone,
+        allowChat,
+        latitude: data.latitude,
+        longitude: data.longitude,
+        locationPrecision: data.locationPrecision,
+        statusHistory: {
+          create: {
+            fromStatus: null,
+            toStatus: STATUSES.DRAFT,
+            actorType: 'APP_USER',
+            actorId: String(appUser.id),
+            reasonCode: 'OWNER_CREATED_DRAFT',
+          },
         },
       },
-    },
-    include: detailInclude(),
+      include: detailInclude(),
+    });
   });
   const attributes = await getResolvedAttributes(created.categoryId);
   return mapDetail(created, attributes);
@@ -1025,6 +1134,8 @@ async function transitionAd(appUser, id, expectedVersion, options) {
   }
   assertClassifiedTransition(ad.status, options.to);
   const settings = await getSettings();
+  // Fast precheck preserves a stable quota error before expensive readiness work.
+  // The authoritative check is repeated under the app-user row lock below.
   if (options.enforceActiveLimit) await ensureActiveLimit(appUser.id, settings, ad.id);
   if (options.requireReady) {
     const readiness = await buildReadiness(ad, { settings });
@@ -1067,6 +1178,10 @@ async function transitionAd(appUser, id, expectedVersion, options) {
   }
 
   await prisma.$transaction(async (tx) => {
+    if (options.enforceActiveLimit) {
+      await lockAppUserClassifiedQuota(tx, appUser.id);
+      await ensureActiveLimit(appUser.id, settings, ad.id, tx);
+    }
     const updated = await tx.classifiedAd.updateMany({
       where: { id: ad.id, appUserId: appUser.id, version: Number(expectedVersion) },
       data: statusData,
@@ -1200,6 +1315,8 @@ module.exports = {
   getMyAd,
   getMyAdReadiness,
   getPostingConfig,
+  listPublicAds,
+  listPublicCategories,
   listMyAds,
   markMyAdSold,
   pauseMyAd,

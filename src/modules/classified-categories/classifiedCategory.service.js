@@ -156,6 +156,18 @@ async function assertBranchHasNoOperationalAds(categoryId, code, message) {
   }
 }
 
+async function assertOperationalBranchCanMove(hierarchyRows, categoryId, parentId) {
+  if (parentId == null) return;
+  const parentPath = getCategoryPath(hierarchyRows, parentId);
+  if (parentPath.every((category) => category.isActive)) return;
+
+  await assertBranchHasNoOperationalAds(
+    categoryId,
+    'CLASSIFIED_CATEGORY_OPERATIONAL_MOVE_BLOCKED',
+    'A category branch with operational ads cannot be moved below an inactive category',
+  );
+}
+
 async function listClassifiedCategories(query) {
   const skip = (query.page - 1) * query.pageSize;
   const where = {};
@@ -265,6 +277,9 @@ async function updateClassifiedCategory(id, data, req) {
   ]);
   if (Object.prototype.hasOwnProperty.call(data, 'parentId')) {
     assertValidCategoryParent(hierarchyRows, id, data.parentId);
+    if (data.parentId !== existing.parentId) {
+      await assertOperationalBranchCanMove(hierarchyRows, id, data.parentId);
+    }
   }
   await assertUniqueIdentity(data, id);
 

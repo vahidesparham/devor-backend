@@ -441,15 +441,14 @@ async function moderateClassifiedAd(id, data, req, options) {
         metadata: readiness ? { readinessChecked: true } : undefined,
       },
     });
-  });
-
-  await audit(req, {
-    action: 'UPDATE',
-    entity: 'ClassifiedAd',
-    entityId: ad.id,
-    before: { status: ad.status, version: ad.version, moderationNote: ad.moderationNote },
-    after: { status: options.to, version: ad.version + 1, moderationNote: updateData.moderationNote ?? ad.moderationNote },
-    details: { reasonCode: options.reasonCode, note: data.note || null },
+    await audit(req, {
+      action: 'UPDATE',
+      entity: 'ClassifiedAd',
+      entityId: ad.id,
+      before: { status: ad.status, version: ad.version, moderationNote: ad.moderationNote },
+      after: { status: options.to, version: ad.version + 1, moderationNote: updateData.moderationNote ?? ad.moderationNote },
+      details: { reasonCode: options.reasonCode, note: data.note || null },
+    }, tx);
   });
   return getClassifiedAdById(ad.id);
 }

@@ -11,6 +11,11 @@ const required = [
   'JWT_REFRESH_EXPIRES_IN'
 ];
 
+function positiveNumber(value, fallback) {
+  const parsed = Number(value);
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : fallback;
+}
+
 required.forEach((key) => {
   if (!process.env[key]) {
     throw new Error(`Missing required env var: ${key}`);
@@ -30,6 +35,10 @@ const env = {
     .map((v) => v.trim())
     .filter(Boolean),
   REQUEST_SIZE_LIMIT: process.env.REQUEST_SIZE_LIMIT || '1mb',
+  CLASSIFIED_EXPIRY_SWEEP_INTERVAL_MS: Math.max(
+    5000,
+    positiveNumber(process.env.CLASSIFIED_EXPIRY_SWEEP_INTERVAL_MS, 60000),
+  ),
   LOG_404_ERRORS: String(process.env.LOG_404_ERRORS || 'false').toLowerCase() === 'true',
   LOG_VALIDATION_ERRORS: String(process.env.LOG_VALIDATION_ERRORS || 'false').toLowerCase() === 'true',
   ERROR_LOG_IGNORE_STATUS_CODES: (process.env.ERROR_LOG_IGNORE_STATUS_CODES || '401,403')

@@ -229,7 +229,7 @@ async function getHome(query) {
         pinIconImage: toPublicAsset(serviceType.pinIconImage),
         color: serviceType.color,
       },
-      title: `Featured ${translation?.title || serviceType.title}`,
+      title: translation?.title || serviceType.title,
       items: businesses,
     });
   }

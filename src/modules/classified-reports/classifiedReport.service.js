@@ -153,27 +153,29 @@ async function transitionReport(id, data, req, options) {
   }
 
   const now = new Date();
-  const updated = await prisma.classifiedReport.updateMany({
-    where: { id: existing.id, version: Number(data.expectedVersion) },
-    data: {
-      status: options.to,
-      version: { increment: 1 },
-      reviewedByAdminId: req.admin.id,
-      reviewedAt: now,
-      resolutionNote: options.close ? data.note : (data.note || existing.resolutionNote),
-    },
-  });
-  if (updated.count !== 1) {
-    throw new AppError(409, 'CLASSIFIED_REPORT_VERSION_CONFLICT', 'Classified report was changed by another request');
-  }
+  await prisma.$transaction(async (tx) => {
+    const updated = await tx.classifiedReport.updateMany({
+      where: { id: existing.id, version: Number(data.expectedVersion) },
+      data: {
+        status: options.to,
+        version: { increment: 1 },
+        reviewedByAdminId: req.admin.id,
+        reviewedAt: now,
+        resolutionNote: options.close ? data.note : (data.note || existing.resolutionNote),
+      },
+    });
+    if (updated.count !== 1) {
+      throw new AppError(409, 'CLASSIFIED_REPORT_VERSION_CONFLICT', 'Classified report was changed by another request');
+    }
 
-  await audit(req, {
-    action: 'UPDATE',
-    entity: 'ClassifiedReport',
-    entityId: existing.id,
-    before: { status: existing.status, version: existing.version, resolutionNote: existing.resolutionNote },
-    after: { status: options.to, version: existing.version + 1, resolutionNote: data.note || existing.resolutionNote },
-    details: { adId: existing.adId, action: options.reasonCode },
+    await audit(req, {
+      action: 'UPDATE',
+      entity: 'ClassifiedReport',
+      entityId: existing.id,
+      before: { status: existing.status, version: existing.version, resolutionNote: existing.resolutionNote },
+      after: { status: options.to, version: existing.version + 1, resolutionNote: data.note || existing.resolutionNote },
+      details: { adId: existing.adId, action: options.reasonCode },
+    }, tx);
   });
   return getClassifiedReportById(existing.id);
 }

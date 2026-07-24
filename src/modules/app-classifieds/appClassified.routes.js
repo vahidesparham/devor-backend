@@ -12,6 +12,7 @@ const {
   imageParamSchema,
   imageUploadBodySchema,
   listMyAdsSchema,
+  publicAdListSchema,
   reorderImagesSchema,
   saveAttributeValuesSchema,
   updateAdSchema,
@@ -28,6 +29,9 @@ const imageUpload = multer({
   storage: multer.memoryStorage(),
   limits: { fileSize: 12 * 1024 * 1024 },
 });
+
+router.get('/categories', controller.publicCategories);
+router.get('/ads', validate(publicAdListSchema, 'query'), controller.publicAds);
 
 router.use(appAuth);
 router.get('/posting-config', controller.postingConfig);
