@@ -1,5 +1,6 @@
 const prisma = require('../../prisma');
 const { AppError } = require('../../shared/http/response');
+const { getDescendantServiceTypeIds, getRootServiceTypeId } = require('../service-types/serviceTypeHierarchy');
 
 function toPublicAsset(url) {
   if (!url) return null;
@@ -197,7 +198,7 @@ async function getHome(query) {
   const featuredSections = [];
   for (const serviceType of serviceTypes) {
     const translation = pickTranslation(serviceType.translations, selectedLanguage, fallbackLanguage);
-    const serviceTypeIds = [serviceType.id, ...serviceType.children.map((item) => item.id)];
+    const serviceTypeIds = await getDescendantServiceTypeIds(serviceType.id, { activeOnly: true });
     const businesses = await listHomeBusinesses({
       where: {
         serviceTypeId: { in: serviceTypeIds },
@@ -624,6 +625,45 @@ function serviceTypePublicPayload(serviceType, selectedLanguage, fallbackLanguag
   };
 }
 
+async function getRootServiceTypeMap(serviceTypeIds, selectedLanguage, fallbackLanguage) {
+  const ids = [...new Set((serviceTypeIds || []).filter(Boolean).map(Number))];
+  if (!ids.length) return new Map();
+
+  const rows = await prisma.serviceType.findMany({
+    select: {
+      id: true,
+      parentId: true,
+      code: true,
+      title: true,
+      image: true,
+      pinIconImage: true,
+      color: true,
+      translations: {
+        where: { lang: { in: [selectedLanguage.code, fallbackLanguage.code] }, isActive: true },
+        select: { lang: true, title: true },
+      },
+    },
+  });
+  const byId = new Map(rows.map((row) => [row.id, row]));
+  const result = new Map();
+
+  for (const id of ids) {
+    let current = byId.get(id);
+    if (!current) continue;
+    const visited = new Set();
+    while (current.parentId) {
+      if (visited.has(current.id)) break;
+      visited.add(current.id);
+      const parent = byId.get(current.parentId);
+      if (!parent) break;
+      current = parent;
+    }
+    result.set(id, current);
+  }
+
+  return result;
+}
+
 function distanceInMeters(startLat, startLng, endLat, endLng) {
   if ([startLat, startLng, endLat, endLng].some((value) => value === null || value === undefined)) return null;
   const earthRadius = 6371000;
@@ -656,17 +696,7 @@ function boundsWhere(query) {
 
 async function resolveExploreServiceTypeIds(serviceTypeId) {
   if (!serviceTypeId) return null;
-  const serviceType = await prisma.serviceType.findUnique({
-    where: { id: Number(serviceTypeId) },
-    select: {
-      id: true,
-      parentId: true,
-      children: { where: { isActive: true }, select: { id: true } },
-    },
-  });
-  if (!serviceType) return [Number(serviceTypeId)];
-  if (serviceType.parentId) return [serviceType.id];
-  return [serviceType.id, ...serviceType.children.map((item) => item.id)];
+  return getDescendantServiceTypeIds(serviceTypeId, { activeOnly: true });
 }
 
 async function getExplore(query, appUserId = null) {
@@ -780,12 +810,13 @@ async function getExplore(query, appUserId = null) {
   const [categories, businesses] = await Promise.all([categoriesPromise, businessesPromise]);
   const reviewStats = await getBusinessReviewStats(businesses.map((business) => business.id));
   const favoriteIds = await getFavoriteBusinessIds(appUserId, businesses.map((business) => business.id));
+  const rootServiceTypes = await getRootServiceTypeMap(businesses.map((business) => business.serviceType.id), selectedLanguage, fallbackLanguage);
   const centerLat = query.centerLat;
   const centerLng = query.centerLng;
 
   const items = businesses.map((business) =>
     normalizeExploreBusiness(
-      business,
+      { ...business, rootServiceType: rootServiceTypes.get(business.serviceType.id) },
       selectedLanguage,
       fallbackLanguage,
       reviewStats.get(business.id),
@@ -877,9 +908,13 @@ async function listBusinessCategories(serviceTypeId, selectedLanguage, fallbackL
   if (serviceTypeId) {
     const serviceType = await prisma.serviceType.findUnique({
       where: { id: Number(serviceTypeId) },
-      select: { id: true, parentId: true },
+      select: {
+        id: true,
+        parentId: true,
+        children: { where: { isActive: true }, select: { id: true } },
+      },
     });
-    parentId = serviceType?.parentId ? serviceType.parentId : Number(serviceTypeId);
+    parentId = serviceType?.children?.length ? serviceType.id : serviceType?.parentId ?? Number(serviceTypeId);
   }
 
   const categories = await prisma.serviceType.findMany({
@@ -967,9 +1002,10 @@ async function listBusinesses(query, appUserId = null) {
 
   const reviewStats = await getBusinessReviewStats(businesses.map((business) => business.id));
   const favoriteIds = await getFavoriteBusinessIds(appUserId, businesses.map((business) => business.id));
+  const rootServiceTypes = await getRootServiceTypeMap(businesses.map((business) => business.serviceType.id), selectedLanguage, fallbackLanguage);
   let items = businesses.map((business) =>
     normalizeExploreBusiness(
-      business,
+      { ...business, rootServiceType: rootServiceTypes.get(business.serviceType.id) },
       selectedLanguage,
       fallbackLanguage,
       reviewStats.get(business.id),
@@ -1007,12 +1043,7 @@ async function listBusinesses(query, appUserId = null) {
 
 async function resolveFilterServiceTypeId(serviceTypeId) {
   if (!serviceTypeId) return null;
-  const serviceType = await prisma.serviceType.findUnique({
-    where: { id: Number(serviceTypeId) },
-    select: { id: true, parentId: true },
-  });
-  if (!serviceType) return Number(serviceTypeId);
-  return serviceType.parentId || serviceType.id;
+  return getRootServiceTypeId(serviceTypeId);
 }
 
 async function getBusinessFilters(query) {
@@ -1103,7 +1134,7 @@ function normalizeExploreBusiness(business, selectedLanguage, fallbackLanguage, 
   const translation = pickTranslation(business.translations, selectedLanguage, fallbackLanguage);
   const cityTranslation = business.city ? pickTranslation(business.city.translations, selectedLanguage, fallbackLanguage) : null;
   const areaTranslation = business.area ? pickTranslation(business.area.translations, selectedLanguage, fallbackLanguage) : null;
-  const rootServiceType = business.serviceType.parent || business.serviceType;
+  const rootServiceType = business.rootServiceType || business.serviceType.parent || business.serviceType;
   const serviceTypePayload = serviceTypePublicPayload(business.serviceType, selectedLanguage, fallbackLanguage);
   const rootServiceTypePayload = serviceTypePublicPayload(rootServiceType, selectedLanguage, fallbackLanguage);
   const latitude = business.latitude === null ? null : Number(business.latitude);
@@ -1259,8 +1290,15 @@ async function listFavoriteBusinesses(appUserId, query) {
 
   const businesses = rows.map((row) => row.business);
   const reviewStats = await getBusinessReviewStats(businesses.map((business) => business.id));
+  const rootServiceTypes = await getRootServiceTypeMap(businesses.map((business) => business.serviceType.id), selectedLanguage, fallbackLanguage);
   return {
-    items: businesses.map((business) => normalizeExploreBusiness(business, selectedLanguage, fallbackLanguage, reviewStats.get(business.id), true)),
+    items: businesses.map((business) => normalizeExploreBusiness(
+      { ...business, rootServiceType: rootServiceTypes.get(business.serviceType.id) },
+      selectedLanguage,
+      fallbackLanguage,
+      reviewStats.get(business.id),
+      true,
+    )),
     meta: {
       page,
       pageSize,
@@ -1321,7 +1359,7 @@ async function listMyReviews(appUserId, query) {
 
   return {
     items: items.map((item) => {
-      const translation = pickTranslation(item.business.translations, selectedLanguage.code, fallbackLanguage.code);
+      const translation = pickTranslation(item.business.translations, selectedLanguage, fallbackLanguage);
       return {
         id: item.id,
         businessId: item.businessId,
@@ -1638,7 +1676,14 @@ async function getBusinessDetail(businessId, query, appUserId = null) {
   if (!business) throw new AppError(404, 'BUSINESS_NOT_FOUND', 'Business not found');
 
   const translation = pickTranslation(business.translations, selectedLanguage, fallbackLanguage);
-  const normalized = normalizeExploreBusiness(business, selectedLanguage, fallbackLanguage, null, false);
+  const rootServiceTypes = await getRootServiceTypeMap([business.serviceType.id], selectedLanguage, fallbackLanguage);
+  const normalized = normalizeExploreBusiness(
+    { ...business, rootServiceType: rootServiceTypes.get(business.serviceType.id) },
+    selectedLanguage,
+    fallbackLanguage,
+    null,
+    false,
+  );
   const reviewOverview = await getReviewOverview(business.id);
   const favoriteIds = await getFavoriteBusinessIds(appUserId, [business.id]);
   const selectedAttributes = new Map();

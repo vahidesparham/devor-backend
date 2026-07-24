@@ -1,6 +1,7 @@
 const prisma = require('../../prisma');
 const { AppError } = require('../../shared/http/response');
 const { audit } = require('../../shared/audit/audit');
+const { isDescendantServiceType } = require('./serviceTypeHierarchy');
 
 function normalize(item) {
   return {
@@ -60,18 +61,12 @@ async function assertParentServiceType(parentId, currentId = null) {
   if (numericCurrentId && numericParentId === numericCurrentId) {
     throw new AppError(400, 'VALIDATION_ERROR', 'Validation failed', { errors: [{ path: 'parentId', message: 'A service type cannot be its own parent' }] });
   }
-  const parent = await prisma.serviceType.findUnique({ where: { id: numericParentId }, select: { id: true, parentId: true } });
+  const parent = await prisma.serviceType.findUnique({ where: { id: numericParentId }, select: { id: true } });
   if (!parent) {
     throw new AppError(400, 'VALIDATION_ERROR', 'Validation failed', { errors: [{ path: 'parentId', message: 'Parent service type not found' }] });
   }
-  if (parent.parentId) {
-    throw new AppError(400, 'VALIDATION_ERROR', 'Validation failed', { errors: [{ path: 'parentId', message: 'Parent service type must be top-level' }] });
-  }
-  if (numericCurrentId) {
-    const childCount = await prisma.serviceType.count({ where: { parentId: numericCurrentId } });
-    if (childCount > 0) {
-      throw new AppError(400, 'VALIDATION_ERROR', 'Validation failed', { errors: [{ path: 'parentId', message: 'A service type with children cannot become a child' }] });
-    }
+  if (numericCurrentId && await isDescendantServiceType(numericParentId, numericCurrentId)) {
+    throw new AppError(400, 'VALIDATION_ERROR', 'Validation failed', { errors: [{ path: 'parentId', message: 'A service type cannot use its descendant as parent' }] });
   }
 }
 

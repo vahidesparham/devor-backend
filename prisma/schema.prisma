@@ -78,6 +78,63 @@ enum BusinessContactLinkType {
   CUSTOM
 }
 
+enum AppWalletTransactionType {
+  CREDIT
+  DEBIT
+  ADJUSTMENT
+}
+
+enum ClassifiedOwnerType {
+  APP_USER
+  BUSINESS
+}
+
+enum ClassifiedAdStatus {
+  DRAFT
+  PENDING_REVIEW
+  PUBLISHED
+  REJECTED
+  PAUSED
+  SOLD
+  EXPIRED
+  ARCHIVED
+  SUSPENDED
+}
+
+enum ClassifiedPriceType {
+  FIXED
+  NEGOTIABLE
+  FREE
+  CONTACT
+}
+
+enum ClassifiedAttributeType {
+  SELECT
+  MULTI_SELECT
+  TEXT
+  NUMBER
+  BOOLEAN
+}
+
+enum ClassifiedLocationPrecision {
+  APPROXIMATE
+  EXACT
+}
+
+enum ClassifiedReportStatus {
+  OPEN
+  REVIEWING
+  RESOLVED
+  DISMISSED
+}
+
+enum ClassifiedActorType {
+  APP_USER
+  BUSINESS_USER
+  ADMIN
+  SYSTEM
+}
+
 enum WeekDay {
   SATURDAY
   SUNDAY
@@ -89,19 +146,21 @@ enum WeekDay {
 }
 
 model AdminUser {
-  id             Int             @id @default(autoincrement())
-  email          String          @unique @db.VarChar(191)
-  firstName      String?         @db.VarChar(100)
-  lastName       String?         @db.VarChar(100)
-  avatar         String?         @db.VarChar(500)
-  passwordHash   String          @db.VarChar(255)
-  isActive       Boolean         @default(true)
-  createdAt      DateTime        @default(now())
-  updatedAt      DateTime        @updatedAt
-  adminUserRoles AdminUserRole[]
-  refreshTokens  RefreshToken[]
-  auditLogs      AuditLog[]
-  errorLogs      ErrorLog[]
+  id                    Int                    @id @default(autoincrement())
+  email                 String                 @unique @db.VarChar(191)
+  firstName             String?                @db.VarChar(100)
+  lastName              String?                @db.VarChar(100)
+  avatar                String?                @db.VarChar(500)
+  passwordHash          String                 @db.VarChar(255)
+  isActive              Boolean                @default(true)
+  createdAt             DateTime               @default(now())
+  updatedAt             DateTime               @updatedAt
+  adminUserRoles        AdminUserRole[]
+  refreshTokens         RefreshToken[]
+  auditLogs             AuditLog[]
+  errorLogs             ErrorLog[]
+  appWalletTransactions AppWalletTransaction[]
+  classifiedReports     ClassifiedReport[]     @relation("ClassifiedReportReviewer")
 }
 
 model Role {
@@ -650,18 +709,19 @@ model AttributeOptionTranslation {
 }
 
 model Country {
-  id           Int                  @id @default(autoincrement())
-  code         String               @unique @db.VarChar(10)
-  title        String               @db.VarChar(160)
-  phoneCode    String               @db.VarChar(20)
-  flagImage    String?              @db.VarChar(500)
-  displayOrder Int                  @default(0)
-  isActive     Boolean              @default(true)
-  createdAt    DateTime             @default(now())
-  updatedAt    DateTime             @updatedAt
-  translations CountryTranslation[]
-  cities       City[]
-  businesses   Business[]
+  id            Int                  @id @default(autoincrement())
+  code          String               @unique @db.VarChar(10)
+  title         String               @db.VarChar(160)
+  phoneCode     String               @db.VarChar(20)
+  flagImage     String?              @db.VarChar(500)
+  displayOrder  Int                  @default(0)
+  isActive      Boolean              @default(true)
+  createdAt     DateTime             @default(now())
+  updatedAt     DateTime             @updatedAt
+  translations  CountryTranslation[]
+  cities        City[]
+  businesses    Business[]
+  classifiedAds ClassifiedAd[]
 
   @@index([isActive, displayOrder])
 }
@@ -683,20 +743,21 @@ model CountryTranslation {
 }
 
 model City {
-  id           Int               @id @default(autoincrement())
-  countryId    Int
-  code         String            @db.VarChar(120)
-  title        String            @db.VarChar(160)
-  latitude     Decimal?          @db.Decimal(10, 7)
-  longitude    Decimal?          @db.Decimal(10, 7)
-  displayOrder Int               @default(0)
-  isActive     Boolean           @default(true)
-  createdAt    DateTime          @default(now())
-  updatedAt    DateTime          @updatedAt
-  country      Country           @relation(fields: [countryId], references: [id], onDelete: Cascade)
-  translations CityTranslation[]
-  areas        Area[]
-  businesses   Business[]
+  id            Int               @id @default(autoincrement())
+  countryId     Int
+  code          String            @db.VarChar(120)
+  title         String            @db.VarChar(160)
+  latitude      Decimal?          @db.Decimal(10, 7)
+  longitude     Decimal?          @db.Decimal(10, 7)
+  displayOrder  Int               @default(0)
+  isActive      Boolean           @default(true)
+  createdAt     DateTime          @default(now())
+  updatedAt     DateTime          @updatedAt
+  country       Country           @relation(fields: [countryId], references: [id], onDelete: Cascade)
+  translations  CityTranslation[]
+  areas         Area[]
+  businesses    Business[]
+  classifiedAds ClassifiedAd[]
 
   @@unique([countryId, code])
   @@index([countryId, isActive, displayOrder])
@@ -719,17 +780,18 @@ model CityTranslation {
 }
 
 model Area {
-  id           Int               @id @default(autoincrement())
-  cityId       Int
-  code         String            @db.VarChar(120)
-  title        String            @db.VarChar(160)
-  displayOrder Int               @default(0)
-  isActive     Boolean           @default(true)
-  createdAt    DateTime          @default(now())
-  updatedAt    DateTime          @updatedAt
-  city         City              @relation(fields: [cityId], references: [id], onDelete: Cascade)
-  translations AreaTranslation[]
-  businesses   Business[]
+  id            Int               @id @default(autoincrement())
+  cityId        Int
+  code          String            @db.VarChar(120)
+  title         String            @db.VarChar(160)
+  displayOrder  Int               @default(0)
+  isActive      Boolean           @default(true)
+  createdAt     DateTime          @default(now())
+  updatedAt     DateTime          @updatedAt
+  city          City              @relation(fields: [cityId], references: [id], onDelete: Cascade)
+  translations  AreaTranslation[]
+  businesses    Business[]
+  classifiedAds ClassifiedAd[]
 
   @@unique([cityId, code])
   @@index([cityId, isActive, displayOrder])
@@ -796,6 +858,7 @@ model Business {
   offerings           BusinessOffering[]
   reviews             BusinessReview[]
   appFavorites        AppFavoriteBusiness[]
+  classifiedAds       ClassifiedAd[]
 
   @@index([serviceTypeId, isActive, displayOrder])
   @@index([countryId])
@@ -1112,23 +1175,69 @@ model BusinessRefreshToken {
 }
 
 model AppUser {
-  id              Int               @id @default(autoincrement())
-  phone           String            @unique @db.VarChar(80)
-  countryCode     String?           @db.VarChar(10)
-  phoneCode       String?           @db.VarChar(20)
-  avatar          String?           @db.VarChar(500)
-  email           String?           @unique @db.VarChar(191)
-  firstName       String?           @db.VarChar(100)
-  lastName        String?           @db.VarChar(100)
-  isActive        Boolean           @default(true)
-  createdAt       DateTime          @default(now())
-  updatedAt       DateTime          @updatedAt
-  refreshTokens   AppRefreshToken[]
-  businessReviews BusinessReview[]
-  favoriteBusinesses AppFavoriteBusiness[]
+  id                  Int                    @id @default(autoincrement())
+  phone               String                 @unique @db.VarChar(80)
+  countryCode         String?                @db.VarChar(10)
+  phoneCode           String?                @db.VarChar(20)
+  avatar              String?                @db.VarChar(500)
+  email               String?                @unique @db.VarChar(191)
+  firstName           String?                @db.VarChar(100)
+  lastName            String?                @db.VarChar(100)
+  isActive            Boolean                @default(true)
+  createdAt           DateTime               @default(now())
+  updatedAt           DateTime               @updatedAt
+  refreshTokens       AppRefreshToken[]
+  businessReviews     BusinessReview[]
+  favoriteBusinesses  AppFavoriteBusiness[]
+  wallet              AppWallet?
+  walletTransactions  AppWalletTransaction[]
+  classifiedAds       ClassifiedAd[]
+  classifiedFavorites ClassifiedFavorite[]
+  classifiedReports   ClassifiedReport[]
 
   @@index([countryCode])
   @@index([isActive])
+}
+
+model AppWallet {
+  id           Int                    @id @default(autoincrement())
+  appUserId    Int                    @unique
+  balance      Decimal                @default(0) @db.Decimal(14, 2)
+  currency     String                 @default("TJS") @db.VarChar(10)
+  createdAt    DateTime               @default(now())
+  updatedAt    DateTime               @updatedAt
+  appUser      AppUser                @relation(fields: [appUserId], references: [id], onDelete: Cascade)
+  transactions AppWalletTransaction[]
+
+  @@index([currency])
+  @@index([updatedAt])
+}
+
+model AppWalletTransaction {
+  id            BigInt                   @id @default(autoincrement())
+  walletId      Int
+  appUserId     Int
+  adminId       Int?
+  type          AppWalletTransactionType
+  amount        Decimal                  @db.Decimal(14, 2)
+  balanceBefore Decimal                  @db.Decimal(14, 2)
+  balanceAfter  Decimal                  @db.Decimal(14, 2)
+  currency      String                   @default("TJS") @db.VarChar(10)
+  reason        String?                  @db.VarChar(160)
+  note          String?                  @db.VarChar(500)
+  referenceType String?                  @db.VarChar(80)
+  referenceId   String?                  @db.VarChar(120)
+  createdAt     DateTime                 @default(now())
+  wallet        AppWallet                @relation(fields: [walletId], references: [id], onDelete: Cascade)
+  appUser       AppUser                  @relation(fields: [appUserId], references: [id], onDelete: Cascade)
+  admin         AdminUser?               @relation(fields: [adminId], references: [id], onDelete: SetNull)
+  classifiedPostingFeeAd ClassifiedAd?   @relation("ClassifiedPostingFeeTransaction")
+
+  @@index([walletId, createdAt])
+  @@index([appUserId, createdAt])
+  @@index([adminId])
+  @@index([type, createdAt])
+  @@index([referenceType, referenceId])
 }
 
 model AppFavoriteBusiness {
@@ -1172,6 +1281,261 @@ model AppRefreshToken {
   user AppUser @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([userId])
+}
+
+model ClassifiedSetting {
+  id                       Int      @id
+  contentLanguage          String   @default("fa") @db.VarChar(20)
+  currency                 String   @default("TJS") @db.VarChar(10)
+  publicationDays          Int      @default(30)
+  maxImagesPerAd           Int      @default(10)
+  minImagesPerAd           Int      @default(1)
+  maxActiveAdsPerAppUser   Int      @default(5)
+  maxDraftAdsPerAppUser    Int      @default(10)
+  maxTitleLength           Int      @default(100)
+  maxDescriptionLength     Int      @default(2000)
+  requireModeration        Boolean  @default(true)
+  allowPhoneContact        Boolean  @default(true)
+  allowChatContact         Boolean  @default(false)
+  allowBusinessClassifieds Boolean  @default(false)
+  viewDeduplicationMinutes Int      @default(30)
+  createdAt                DateTime @default(now())
+  updatedAt                DateTime @updatedAt
+}
+
+model ClassifiedCategory {
+  id           Int                   @id @default(autoincrement())
+  parentId     Int?
+  code         String                @unique @db.VarChar(80)
+  slug         String                @unique @db.VarChar(120)
+  title        String                @db.VarChar(160)
+  description  String?               @db.VarChar(500)
+  image        String?               @db.VarChar(500)
+  color        String?               @db.VarChar(30)
+  displayOrder Int                   @default(0)
+  isActive     Boolean               @default(true)
+  allowAds     Boolean               @default(true)
+  postingFee   Decimal               @default(0) @db.Decimal(14, 2)
+  createdAt    DateTime              @default(now())
+  updatedAt    DateTime              @updatedAt
+  parent       ClassifiedCategory?   @relation("ClassifiedCategoryHierarchy", fields: [parentId], references: [id], onDelete: Restrict)
+  children     ClassifiedCategory[]  @relation("ClassifiedCategoryHierarchy")
+  attributes   ClassifiedAttribute[]
+  ads          ClassifiedAd[]
+
+  @@index([parentId, isActive, displayOrder])
+  @@index([isActive, allowAds, displayOrder])
+}
+
+model ClassifiedAttribute {
+  id            Int                          @id @default(autoincrement())
+  categoryId    Int
+  code          String                       @db.VarChar(120)
+  title         String                       @db.VarChar(160)
+  type          ClassifiedAttributeType
+  unit          String?                      @db.VarChar(60)
+  placeholder   String?                      @db.VarChar(255)
+  isRequired    Boolean                      @default(false)
+  showInFilters Boolean                      @default(false)
+  displayOrder  Int                          @default(0)
+  isActive      Boolean                      @default(true)
+  minValue      Decimal?                     @db.Decimal(14, 2)
+  maxValue      Decimal?                     @db.Decimal(14, 2)
+  minLength     Int?
+  maxLength     Int?
+  createdAt     DateTime                     @default(now())
+  updatedAt     DateTime                     @updatedAt
+  category      ClassifiedCategory           @relation(fields: [categoryId], references: [id], onDelete: Cascade)
+  options       ClassifiedAttributeOption[]
+  values        ClassifiedAdAttributeValue[]
+
+  @@unique([categoryId, code])
+  @@index([categoryId, isActive, displayOrder])
+  @@index([categoryId, showInFilters, isActive])
+}
+
+model ClassifiedAttributeOption {
+  id           Int                          @id @default(autoincrement())
+  attributeId  Int
+  code         String                       @db.VarChar(120)
+  title        String                       @db.VarChar(160)
+  image        String?                      @db.VarChar(500)
+  color        String?                      @db.VarChar(30)
+  displayOrder Int                          @default(0)
+  isActive     Boolean                      @default(true)
+  createdAt    DateTime                     @default(now())
+  updatedAt    DateTime                     @updatedAt
+  attribute    ClassifiedAttribute          @relation(fields: [attributeId], references: [id], onDelete: Cascade)
+  values       ClassifiedAdAttributeValue[]
+
+  @@unique([attributeId, code])
+  @@index([attributeId, isActive, displayOrder])
+}
+
+model ClassifiedAd {
+  id                Int                          @id @default(autoincrement())
+  publicCode        String                       @unique @db.VarChar(24)
+  categoryId        Int
+  ownerType         ClassifiedOwnerType
+  appUserId         Int?
+  businessId        Int?
+  countryId         Int
+  cityId            Int
+  areaId            Int?
+  title             String                       @db.VarChar(120)
+  description       String                       @db.Text
+  priceType         ClassifiedPriceType
+  price             Decimal?                     @db.Decimal(14, 2)
+  currency          String                       @default("TJS") @db.VarChar(10)
+  contactName       String?                      @db.VarChar(120)
+  contactPhone      String                       @db.VarChar(80)
+  allowPhone        Boolean                      @default(true)
+  allowChat         Boolean                      @default(false)
+  latitude          Decimal?                     @db.Decimal(10, 7)
+  longitude         Decimal?                     @db.Decimal(10, 7)
+  locationPrecision ClassifiedLocationPrecision  @default(APPROXIMATE)
+  status            ClassifiedAdStatus           @default(DRAFT)
+  submittedAt       DateTime?
+  reviewedAt        DateTime?
+  publishedAt       DateTime?
+  expiresAt         DateTime?
+  soldAt            DateTime?
+  archivedAt        DateTime?
+  deletedAt         DateTime?
+  moderationNote    String?                      @db.Text
+  postingFee        Decimal                      @default(0) @db.Decimal(14, 2)
+  postingFeeCurrency String                      @default("TJS") @db.VarChar(10)
+  postingFeePaidAt  DateTime?
+  postingFeeTransactionId BigInt?                @unique
+  version           Int                          @default(1)
+  viewCount         Int                          @default(0)
+  favoriteCount     Int                          @default(0)
+  reportCount       Int                          @default(0)
+  createdAt         DateTime                     @default(now())
+  updatedAt         DateTime                     @updatedAt
+  category          ClassifiedCategory           @relation(fields: [categoryId], references: [id], onDelete: Restrict)
+  appUser           AppUser?                     @relation(fields: [appUserId], references: [id], onDelete: Restrict)
+  business          Business?                    @relation(fields: [businessId], references: [id], onDelete: Restrict)
+  country           Country                      @relation(fields: [countryId], references: [id], onDelete: Restrict)
+  city              City                         @relation(fields: [cityId], references: [id], onDelete: Restrict)
+  area              Area?                        @relation(fields: [areaId], references: [id], onDelete: SetNull)
+  postingFeeTransaction AppWalletTransaction?    @relation("ClassifiedPostingFeeTransaction", fields: [postingFeeTransactionId], references: [id], onDelete: SetNull)
+  images            ClassifiedAdImage[]
+  attributeValues   ClassifiedAdAttributeValue[]
+  favorites         ClassifiedFavorite[]
+  reports           ClassifiedReport[]
+  statusHistory     ClassifiedAdStatusHistory[]
+  dailyViews        ClassifiedAdViewDaily[]
+
+  @@index([status, cityId, publishedAt])
+  @@index([status, categoryId, publishedAt])
+  @@index([status, cityId, categoryId, publishedAt])
+  @@index([appUserId, status, updatedAt])
+  @@index([businessId, status, updatedAt])
+  @@index([priceType, price])
+  @@index([expiresAt, status])
+  @@index([deletedAt])
+}
+
+model ClassifiedAdImage {
+  id           Int          @id @default(autoincrement())
+  adId         Int
+  imageUrl     String       @db.VarChar(500)
+  thumbnailUrl String       @db.VarChar(500)
+  width        Int?
+  height       Int?
+  displayOrder Int          @default(0)
+  isCover      Boolean      @default(false)
+  createdAt    DateTime     @default(now())
+  updatedAt    DateTime     @updatedAt
+  ad           ClassifiedAd @relation(fields: [adId], references: [id], onDelete: Cascade)
+
+  @@index([adId, displayOrder])
+  @@index([adId, isCover])
+}
+
+model ClassifiedAdAttributeValue {
+  id           Int                        @id @default(autoincrement())
+  adId         Int
+  attributeId  Int
+  optionId     Int?
+  textValue    String?                    @db.Text
+  numberValue  Decimal?                   @db.Decimal(14, 2)
+  booleanValue Boolean?
+  ad           ClassifiedAd               @relation(fields: [adId], references: [id], onDelete: Cascade)
+  attribute    ClassifiedAttribute        @relation(fields: [attributeId], references: [id], onDelete: Restrict)
+  option       ClassifiedAttributeOption? @relation(fields: [optionId], references: [id], onDelete: Restrict)
+
+  @@unique([adId, attributeId, optionId])
+  @@index([adId, attributeId])
+  @@index([attributeId, optionId])
+  @@index([attributeId, numberValue])
+  @@index([attributeId, booleanValue])
+}
+
+model ClassifiedFavorite {
+  appUserId Int
+  adId      Int
+  createdAt DateTime     @default(now())
+  appUser   AppUser      @relation(fields: [appUserId], references: [id], onDelete: Cascade)
+  ad        ClassifiedAd @relation(fields: [adId], references: [id], onDelete: Cascade)
+
+  @@id([appUserId, adId])
+  @@index([adId, createdAt])
+}
+
+model ClassifiedReport {
+  id                Int                    @id @default(autoincrement())
+  adId              Int
+  reporterAppUserId Int?
+  reasonCode        String                 @db.VarChar(80)
+  description       String?                @db.VarChar(1000)
+  status            ClassifiedReportStatus @default(OPEN)
+  reviewedByAdminId Int?
+  resolutionNote    String?                @db.VarChar(1000)
+  reviewedAt        DateTime?
+  version           Int                    @default(1)
+  createdAt         DateTime               @default(now())
+  updatedAt         DateTime               @updatedAt
+  ad                ClassifiedAd           @relation(fields: [adId], references: [id], onDelete: Cascade)
+  reporter          AppUser?               @relation(fields: [reporterAppUserId], references: [id], onDelete: SetNull)
+  reviewedBy        AdminUser?             @relation("ClassifiedReportReviewer", fields: [reviewedByAdminId], references: [id], onDelete: SetNull)
+
+  @@index([adId, status, createdAt])
+  @@index([reporterAppUserId, createdAt])
+  @@index([reviewedByAdminId, status])
+}
+
+model ClassifiedAdStatusHistory {
+  id         BigInt              @id @default(autoincrement())
+  adId       Int
+  fromStatus ClassifiedAdStatus?
+  toStatus   ClassifiedAdStatus
+  actorType  ClassifiedActorType
+  actorId    String?             @db.VarChar(120)
+  reasonCode String?             @db.VarChar(80)
+  note       String?             @db.VarChar(1000)
+  metadata   Json?
+  createdAt  DateTime            @default(now())
+  ad         ClassifiedAd        @relation(fields: [adId], references: [id], onDelete: Cascade)
+
+  @@index([adId, createdAt])
+  @@index([toStatus, createdAt])
+  @@index([actorType, actorId])
+}
+
+model ClassifiedAdViewDaily {
+  adId         Int
+  viewDate     DateTime     @db.Date
+  source       String       @default("unknown") @db.VarChar(40)
+  viewCount    Int          @default(0)
+  contactCount Int          @default(0)
+  createdAt    DateTime     @default(now())
+  updatedAt    DateTime     @updatedAt
+  ad           ClassifiedAd @relation(fields: [adId], references: [id], onDelete: Cascade)
+
+  @@id([adId, viewDate, source])
+  @@index([viewDate, source])
 }
 
 model BusinessPermission {

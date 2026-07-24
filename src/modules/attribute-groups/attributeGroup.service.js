@@ -1,6 +1,7 @@
 const prisma = require('../../prisma');
 const { AppError } = require('../../shared/http/response');
 const { audit } = require('../../shared/audit/audit');
+const { getRootServiceTypeId } = require('../service-types/serviceTypeHierarchy');
 
 function normalize(item) {
   return {
@@ -28,9 +29,7 @@ async function assertServiceType(id) {
 
 async function resolveTopLevelServiceTypeId(id) {
   if (!id) return null;
-  const serviceType = await prisma.serviceType.findUnique({ where: { id: Number(id) }, select: { id: true, parentId: true } });
-  if (!serviceType) return Number(id);
-  return serviceType.parentId || serviceType.id;
+  return getRootServiceTypeId(id);
 }
 
 async function assertLanguages(codes) {

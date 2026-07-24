@@ -102,6 +102,12 @@ const publicMyReviewListQuerySchema = langQuerySchema.extend({
   pageSize: z.coerce.number().int().min(1).max(50).optional().default(20),
 });
 
+const publicWalletTransactionListQuerySchema = z.object({
+  page: z.coerce.number().int().min(1).optional().default(1),
+  pageSize: z.coerce.number().int().min(1).max(50).optional().default(20),
+  type: z.enum(['CREDIT', 'DEBIT', 'ADJUSTMENT']).optional(),
+});
+
 const createBusinessReviewSchema = z.object({
   rating: z.coerce.number().min(1).max(5),
   comment: z.string().trim().max(1000).optional().nullable(),
@@ -121,5 +127,6 @@ module.exports = {
   publicBusinessReviewListQuerySchema,
   publicFavoriteBusinessListQuerySchema,
   publicMyReviewListQuerySchema,
+  publicWalletTransactionListQuerySchema,
   createBusinessReviewSchema,
 };

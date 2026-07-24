@@ -7,6 +7,7 @@ function fullName(item) {
 }
 
 function mapAppUser(item) {
+  const wallet = item.wallet || null;
   return {
     id: item.id,
     phone: item.phone,
@@ -18,6 +19,19 @@ function mapAppUser(item) {
     lastName: item.lastName,
     displayName: fullName(item) || item.phone,
     isActive: item.isActive,
+    wallet: wallet ? {
+      id: wallet.id,
+      balance: Number(wallet.balance || 0),
+      currency: wallet.currency,
+      transactionCount: wallet._count?.transactions ?? 0,
+      updatedAt: wallet.updatedAt,
+    } : {
+      id: null,
+      balance: 0,
+      currency: 'TJS',
+      transactionCount: 0,
+      updatedAt: null,
+    },
     refreshTokenCount: item._count?.refreshTokens ?? 0,
     createdAt: item.createdAt,
     updatedAt: item.updatedAt,
@@ -58,7 +72,10 @@ async function listAppUsers(query) {
       skip,
       take: query.pageSize,
       orderBy: [{ [query.sortBy]: query.sortDir }, { id: 'desc' }],
-      include: { _count: { select: { refreshTokens: true } } },
+      include: {
+        wallet: { include: { _count: { select: { transactions: true } } } },
+        _count: { select: { refreshTokens: true } },
+      },
     }),
     prisma.appUser.count({ where }),
   ]);
@@ -77,10 +94,58 @@ async function listAppUsers(query) {
 async function getAppUserById(id) {
   const item = await prisma.appUser.findUnique({
     where: { id },
-    include: { _count: { select: { refreshTokens: true } } },
+    include: {
+      wallet: { include: { _count: { select: { transactions: true } } } },
+      _count: { select: { refreshTokens: true } },
+    },
   });
   if (!item) throw new AppError(404, 'NOT_FOUND', 'App user not found');
   return mapAppUser(item);
+}
+
+async function createAppUser(data, req) {
+  const phone = data.phone.trim();
+  const email = data.email ? data.email.trim().toLowerCase() : null;
+
+  const existingPhone = await prisma.appUser.findUnique({ where: { phone } });
+  if (existingPhone) {
+    throw new AppError(409, 'DUPLICATE_APP_USER_PHONE', 'Another app user already uses this phone');
+  }
+
+  if (email) {
+    const existingEmail = await prisma.appUser.findUnique({ where: { email } });
+    if (existingEmail) {
+      throw new AppError(409, 'DUPLICATE_APP_USER_EMAIL', 'Another app user already uses this email');
+    }
+  }
+
+  const created = await prisma.appUser.create({
+    data: {
+      phone,
+      countryCode: data.countryCode || null,
+      phoneCode: data.phoneCode || null,
+      avatar: data.avatar || null,
+      email,
+      firstName: data.firstName || null,
+      lastName: data.lastName || null,
+      isActive: data.isActive ?? true,
+      wallet: { create: { currency: 'TJS' } },
+    },
+    include: {
+      wallet: { include: { _count: { select: { transactions: true } } } },
+      _count: { select: { refreshTokens: true } },
+    },
+  });
+
+  await audit(req, {
+    action: 'CREATE',
+    entity: 'AppUser',
+    entityId: created.id,
+    before: null,
+    after: normalizeCore(created),
+  });
+
+  return mapAppUser(created);
 }
 
 async function updateAppUser(id, data, req) {
@@ -117,5 +182,6 @@ async function updateAppUser(id, data, req) {
 module.exports = {
   listAppUsers,
   getAppUserById,
+  createAppUser,
   updateAppUser,
 };

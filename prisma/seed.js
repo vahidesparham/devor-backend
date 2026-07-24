@@ -1,6 +1,10 @@
 const bcrypt = require("bcryptjs");
 const dotenv = require("dotenv");
 const { PrismaClient } = require("../src/generated/prisma-client");
+const {
+    CLASSIFIED_SETTINGS_ID,
+    DEFAULT_CLASSIFIED_SETTINGS,
+} = require("../src/modules/classifieds-domain/classifiedSettings");
 
 dotenv.config();
 
@@ -78,7 +82,26 @@ const adminPermissions = [
     "business_users.update",
     "business_users.delete",
     "app_users.read",
+    "app_users.create",
     "app_users.update",
+    "app_wallets.read",
+    "app_wallets.update",
+    "classified_categories.read",
+    "classified_categories.create",
+    "classified_categories.update",
+    "classified_categories.delete",
+    "classified_attributes.read",
+    "classified_attributes.create",
+    "classified_attributes.update",
+    "classified_attributes.delete",
+    "classified_ads.read",
+    "classified_ads.moderate",
+    "classified_ads.suspend",
+    "classified_ads.archive",
+    "classified_reports.read",
+    "classified_reports.update",
+    "classified_settings.read",
+    "classified_settings.update",
     "business_roles.read",
     "business_roles.create",
     "business_roles.update",
@@ -121,6 +144,9 @@ const imageConfigs = [
     { code: "language_image", width: 512, height: 512, thumbnailWidth: 128, thumbnailHeight: 128, folderName: "languages" },
     { code: "business_user_avatar", width: 800, height: 800, thumbnailWidth: 200, thumbnailHeight: 200, folderName: "business-user-avatars" },
     { code: "app_user_avatar", width: 800, height: 800, thumbnailWidth: 200, thumbnailHeight: 200, folderName: "app-user-avatars" },
+    { code: "classified_ad_image", width: 1600, height: 1200, thumbnailWidth: 400, thumbnailHeight: 300, folderName: "classified-ads" },
+    { code: "classified_category_image", width: 800, height: 600, thumbnailWidth: 240, thumbnailHeight: 180, folderName: "classified-categories" },
+    { code: "classified_attribute_option_image", width: 512, height: 512, thumbnailWidth: 128, thumbnailHeight: 128, folderName: "classified-attribute-options" },
     { code: "business_logo", width: 512, height: 512, thumbnailWidth: 128, thumbnailHeight: 128, folderName: "business-logos" },
     { code: "business_cover", width: 1200, height: 800, thumbnailWidth: 360, thumbnailHeight: 240, folderName: "business-covers" },
     { code: "business_vertical", width: 800, height: 1200, thumbnailWidth: 240, thumbnailHeight: 360, folderName: "business-verticals" },
@@ -276,6 +302,14 @@ async function seedPanelSettings() {
     });
 }
 
+async function seedClassifiedSettings() {
+    await prisma.classifiedSetting.upsert({
+        where: { id: CLASSIFIED_SETTINGS_ID },
+        update: {},
+        create: DEFAULT_CLASSIFIED_SETTINGS,
+    });
+}
+
 async function seedContactPage() {
     await prisma.contactPage.upsert({
         where: { id: 1 },
@@ -300,6 +334,7 @@ async function main() {
     await seedLanguages();
     await seedImageConfigs();
     await seedPanelSettings();
+    await seedClassifiedSettings();
     await seedContactPage();
     await seedBusinessPermissions();
 

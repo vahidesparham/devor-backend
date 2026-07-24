@@ -1,5 +1,6 @@
 const { ok } = require('../../shared/http/response');
 const service = require('./appPublic.service');
+const walletService = require('../app-wallets/appWallet.service');
 
 async function bootstrap(_req, res) {
   const data = await service.getBootstrap();
@@ -86,6 +87,16 @@ async function myReviews(req, res) {
   return ok(res, { code: 'APP_MY_REVIEW_LIST', data: data.items, meta: data.meta });
 }
 
+async function wallet(req, res) {
+  const data = await walletService.getPublicWallet(req.appUser.id);
+  return ok(res, { code: 'APP_WALLET', data });
+}
+
+async function walletTransactions(req, res) {
+  const data = await walletService.listPublicWalletTransactions(req.appUser.id, req.query);
+  return ok(res, { code: 'APP_WALLET_TRANSACTION_LIST', data: data.items, meta: data.meta });
+}
+
 async function createBusinessReview(req, res) {
   const data = await service.createBusinessReview(req.appUser.id, req.params.id, req.body);
   return ok(res, { code: 'APP_BUSINESS_REVIEW_SAVED', data });
@@ -119,6 +130,8 @@ module.exports = {
   businessReviews,
   favoriteBusinesses,
   myReviews,
+  wallet,
+  walletTransactions,
   createBusinessReview,
   addBusinessFavorite,
   removeBusinessFavorite,

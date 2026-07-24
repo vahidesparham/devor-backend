@@ -24,6 +24,17 @@ const listAppUsersSchema = z.object({
   sortDir: z.enum(['asc', 'desc']).optional().default('desc'),
 });
 
+const createAppUserSchema = z.object({
+  phone: z.string().trim().min(3).max(80),
+  countryCode: optionalText(10),
+  phoneCode: optionalText(20),
+  avatar: optionalText(500),
+  email: optionalText(191),
+  firstName: optionalText(100),
+  lastName: optionalText(100),
+  isActive: z.boolean().optional().default(true),
+});
+
 const updateAppUserSchema = z
   .object({
     avatar: optionalText(500),
@@ -44,6 +55,7 @@ const idParamSchema = z.object({
 
 module.exports = {
   listAppUsersSchema,
+  createAppUserSchema,
   updateAppUserSchema,
   idParamSchema,
 };

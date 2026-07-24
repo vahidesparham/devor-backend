@@ -5,6 +5,7 @@ const appAuth = require('../../middlewares/appAuth');
 const optionalAppAuth = require('../../middlewares/optionalAppAuth');
 const controller = require('./appPublic.controller');
 const authController = require('./appAuth.controller');
+const appClassifiedRoutes = require('../app-classifieds/appClassified.routes');
 const { completeProfileSchema, refreshSchema, requestOtpSchema, verifyOtpSchema } = require('./appAuth.schemas');
 const {
   contentPageParamSchema,
@@ -20,6 +21,7 @@ const {
   publicBusinessReviewListQuerySchema,
   publicFavoriteBusinessListQuerySchema,
   publicMyReviewListQuerySchema,
+  publicWalletTransactionListQuerySchema,
   createBusinessReviewSchema,
 } = require('./appPublic.schemas');
 
@@ -42,6 +44,8 @@ router.get('/contact-page', validate(langQuerySchema, 'query'), controller.conta
 router.get('/blog-posts', validate(publicBlogListQuerySchema, 'query'), controller.blogPosts);
 router.get('/favorites', appAuth, validate(publicFavoriteBusinessListQuerySchema, 'query'), controller.favoriteBusinesses);
 router.get('/my-reviews', appAuth, validate(publicMyReviewListQuerySchema, 'query'), controller.myReviews);
+router.get('/wallet', appAuth, controller.wallet);
+router.get('/wallet/transactions', appAuth, validate(publicWalletTransactionListQuerySchema, 'query'), controller.walletTransactions);
 router.get(
   '/businesses/:id',
   optionalAppAuth,
@@ -92,5 +96,6 @@ router.post('/auth/refresh', validate(refreshSchema), authController.refresh);
 router.get('/auth/me', appAuth, authController.me);
 router.patch('/auth/profile', appAuth, validate(completeProfileSchema), authController.completeProfile);
 router.post('/auth/avatar', appAuth, imageUpload.single('image'), authController.uploadAvatar);
+router.use('/classifieds', appClassifiedRoutes);
 
 module.exports = router;

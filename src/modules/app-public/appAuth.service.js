@@ -100,6 +100,7 @@ async function verifyOtp(data, req) {
         phone,
         countryCode: data.countryCode || challenge.countryCode || null,
         phoneCode: data.phoneCode || challenge.phoneCode || null,
+        wallet: { create: { currency: 'TJS' } },
       },
     });
   }

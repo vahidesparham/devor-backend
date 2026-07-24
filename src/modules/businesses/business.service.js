@@ -3,6 +3,7 @@ const { Prisma } = require('../../generated/prisma-client');
 const { AppError } = require('../../shared/http/response');
 const { audit } = require('../../shared/audit/audit');
 const { ensureDefaultBusinessRoles } = require('../business-roles/businessRole.service');
+const { getRootServiceTypeId } = require('../service-types/serviceTypeHierarchy');
 
 async function assertLanguages(codes) {
   const existing = await prisma.language.findMany({ where: { code: { in: codes }, isActive: true }, select: { code: true } });
@@ -16,9 +17,9 @@ async function assertLanguages(codes) {
 }
 
 async function assertBusinessRelations(serviceTypeId, attributeOptionIds, attributeValues = []) {
-  const serviceType = await prisma.serviceType.findUnique({ where: { id: serviceTypeId }, select: { id: true, parentId: true } });
+  const serviceType = await prisma.serviceType.findUnique({ where: { id: serviceTypeId }, select: { id: true } });
   if (!serviceType) throw new AppError(400, 'VALIDATION_ERROR', 'Validation failed', { errors: [{ path: 'serviceTypeId', message: 'Service type not found' }] });
-  const attributeServiceTypeId = serviceType.parentId || serviceType.id;
+  const attributeServiceTypeId = await getRootServiceTypeId(serviceType.id);
 
   const groups = await prisma.attributeGroup.findMany({
     where: { serviceTypeId: attributeServiceTypeId },
