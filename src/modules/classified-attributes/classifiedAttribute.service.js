@@ -10,6 +10,7 @@ const SELECT_TYPES = new Set(['SELECT', 'MULTI_SELECT']);
 const OPERATIONAL_AD_STATUSES = ['PENDING_REVIEW', 'PUBLISHED', 'PAUSED', 'SUSPENDED'];
 const ATTRIBUTE_CONTRACT_FIELDS = [
   'categoryId',
+  'dependsOnAttributeId',
   'code',
   'type',
   'isRequired',
@@ -23,6 +24,7 @@ const ATTRIBUTE_CONTRACT_FIELDS = [
 function normalizeAttribute(item) {
   return {
     categoryId: item.categoryId,
+    dependsOnAttributeId: item.dependsOnAttributeId,
     code: item.code,
     title: item.title,
     type: item.type,
@@ -42,6 +44,7 @@ function normalizeAttribute(item) {
 function normalizeOption(item) {
   return {
     attributeId: item.attributeId,
+    parentOptionId: item.parentOptionId,
     code: item.code,
     title: item.title,
     image: item.image,
@@ -104,9 +107,24 @@ function attributeInclude() {
     },
     options: {
       orderBy: [{ displayOrder: 'asc' }, { id: 'asc' }],
-      include: { _count: { select: { values: true } } },
+      include: { _count: { select: { values: true, childOptions: true } } },
     },
-    _count: { select: { options: true, values: true } },
+    dependsOnAttribute: {
+      select: {
+        id: true,
+        categoryId: true,
+        code: true,
+        code: true,
+        title: true,
+        type: true,
+        isActive: true,
+        options: {
+          orderBy: [{ displayOrder: 'asc' }, { id: 'asc' }],
+          select: { id: true, code: true, title: true, isActive: true },
+        },
+      },
+    },
+    _count: { select: { options: true, values: true, dependentAttributes: true } },
   };
 }
 
@@ -242,6 +260,192 @@ async function assertCompatibleInheritance({ categoryId, code, type, currentId =
   }
 }
 
+async function assertNoDependencyOverride({ categoryId, code, currentId = null }) {
+  const categoryRows = await getCategoryRows();
+  const ancestorIds = getCategoryPath(categoryRows, categoryId).map((item) => item.id);
+  const descendantIds = collectDescendantCategoryIds(categoryRows, categoryId);
+  const related = await prisma.classifiedAttribute.findMany({
+    where: {
+      categoryId: { in: [...new Set([...ancestorIds, ...descendantIds])] },
+      code,
+      ...(currentId ? { id: { not: currentId } } : {}),
+    },
+    select: {
+      id: true,
+      title: true,
+      dependsOnAttributeId: true,
+      _count: { select: { dependentAttributes: true } },
+    },
+  });
+  const dependencyContract = related.find((attribute) => (
+    attribute.dependsOnAttributeId != null || attribute._count.dependentAttributes > 0
+  ));
+  if (dependencyContract) {
+    throw new AppError(
+      409,
+      'CLASSIFIED_ATTRIBUTE_DEPENDENCY_OVERRIDE',
+      'An attribute participating in a dependency cannot be overridden in the same category branch',
+      {
+        errors: [{
+          path: 'code',
+          message: `The related attribute "${dependencyContract.title}" participates in a dependency`,
+        }],
+      },
+    );
+  }
+}
+
+async function assertAttributeDependency({
+  categoryId,
+  dependsOnAttributeId,
+  type,
+  showInFilters = false,
+  currentId = null,
+  options = [],
+}) {
+  if (dependsOnAttributeId == null) {
+    const invalidIndex = options.findIndex((option) => option.parentOptionId != null);
+    if (invalidIndex >= 0) {
+      throw new AppError(400, 'CLASSIFIED_ATTRIBUTE_DEPENDENCY_INVALID', 'Parent options require a dependent attribute', {
+        errors: [{
+          path: `options.${invalidIndex}.parentOptionId`,
+          message: 'Remove the parent option or choose a dependency source',
+        }],
+      });
+    }
+    return null;
+  }
+  if (!SELECT_TYPES.has(type)) {
+    throw new AppError(400, 'CLASSIFIED_ATTRIBUTE_DEPENDENCY_INVALID', 'Only selection attributes can be dependent', {
+      errors: [{ path: 'dependsOnAttributeId', message: 'Choose a selection type for a dependent attribute' }],
+    });
+  }
+  if (currentId && Number(dependsOnAttributeId) === Number(currentId)) {
+    throw new AppError(400, 'CLASSIFIED_ATTRIBUTE_DEPENDENCY_CYCLE', 'An attribute cannot depend on itself', {
+      errors: [{ path: 'dependsOnAttributeId', message: 'Choose another attribute' }],
+    });
+  }
+
+  const [source, categoryRows, dependencyRows] = await Promise.all([
+    prisma.classifiedAttribute.findUnique({
+      where: { id: Number(dependsOnAttributeId) },
+      select: {
+        id: true,
+        categoryId: true,
+        title: true,
+        type: true,
+        isActive: true,
+        showInFilters: true,
+      },
+    }),
+    getCategoryRows(),
+    currentId
+      ? prisma.classifiedAttribute.findMany({
+        select: { id: true, dependsOnAttributeId: true },
+      })
+      : Promise.resolve([]),
+  ]);
+  const allowedCategoryIds = new Set(
+    getCategoryPath(categoryRows, Number(categoryId)).map((category) => category.id),
+  );
+  if (!source || source.type !== 'SELECT' || !source.isActive || !allowedCategoryIds.has(source.categoryId)) {
+    throw new AppError(400, 'CLASSIFIED_ATTRIBUTE_DEPENDENCY_INVALID', 'Dependency source must be an active single-select attribute in this category path', {
+      errors: [{
+        path: 'dependsOnAttributeId',
+        message: 'Choose an active single-select attribute from this category or one of its parents',
+      }],
+    });
+  }
+  const attributesWithSourceCode = await prisma.classifiedAttribute.findMany({
+    where: {
+      categoryId: { in: [...allowedCategoryIds] },
+      code: source.code,
+      isActive: true,
+    },
+    select: { id: true, categoryId: true },
+  });
+  const depthByCategoryId = new Map(
+    getCategoryPath(categoryRows, Number(categoryId)).map((category, index) => [category.id, index]),
+  );
+  const effectiveSource = attributesWithSourceCode.sort((left, right) => (
+    depthByCategoryId.get(right.categoryId) - depthByCategoryId.get(left.categoryId)
+  ))[0];
+  if (effectiveSource?.id !== source.id) {
+    throw new AppError(400, 'CLASSIFIED_ATTRIBUTE_DEPENDENCY_SHADOWED', 'Dependency source is overridden in this category path', {
+      errors: [{
+        path: 'dependsOnAttributeId',
+        message: 'Choose the effective attribute defined closest to this category',
+      }],
+    });
+  }
+  const affectedDescendantIds = collectDescendantCategoryIds(categoryRows, Number(categoryId));
+  const descendantOverride = await prisma.classifiedAttribute.findFirst({
+    where: {
+      id: { not: source.id },
+      categoryId: { in: affectedDescendantIds },
+      code: source.code,
+      isActive: true,
+    },
+    select: { id: true },
+  });
+  if (descendantOverride) {
+    throw new AppError(409, 'CLASSIFIED_ATTRIBUTE_DEPENDENCY_OVERRIDE', 'Dependency source is overridden below this category', {
+      errors: [{
+        path: 'dependsOnAttributeId',
+        message: 'Remove the source override before creating this dependency',
+      }],
+    });
+  }
+  if (showInFilters && !source.showInFilters) {
+    throw new AppError(400, 'CLASSIFIED_ATTRIBUTE_DEPENDENCY_FILTER_INVALID', 'A filterable dependent attribute requires a filterable parent', {
+      errors: [{
+        path: 'dependsOnAttributeId',
+        message: 'Enable filtering on the parent attribute first',
+      }],
+    });
+  }
+
+  if (currentId) {
+    const byId = new Map(dependencyRows.map((attribute) => [attribute.id, attribute.dependsOnAttributeId]));
+    let cursor = source.id;
+    const visited = new Set();
+    while (cursor != null && !visited.has(cursor)) {
+      if (cursor === Number(currentId)) {
+        throw new AppError(400, 'CLASSIFIED_ATTRIBUTE_DEPENDENCY_CYCLE', 'Attribute dependencies cannot contain a cycle', {
+          errors: [{ path: 'dependsOnAttributeId', message: 'This selection would create a dependency cycle' }],
+        });
+      }
+      visited.add(cursor);
+      cursor = byId.get(cursor) ?? null;
+    }
+  }
+
+  const parentOptionIds = [...new Set(options.map((option) => option.parentOptionId).filter(Boolean))];
+  if (options.some((option) => option.parentOptionId == null)) {
+    const index = options.findIndex((option) => option.parentOptionId == null);
+    throw new AppError(400, 'CLASSIFIED_ATTRIBUTE_PARENT_OPTION_REQUIRED', 'Every dependent option requires a parent option', {
+      errors: [{
+        path: `options.${index}.parentOptionId`,
+        message: `Choose a ${source.title} option`,
+      }],
+    });
+  }
+  if (parentOptionIds.length) {
+    const validParentCount = await prisma.classifiedAttributeOption.count({
+      where: {
+        id: { in: parentOptionIds },
+        attributeId: source.id,
+      },
+    });
+    if (validParentCount !== parentOptionIds.length) {
+      throw new AppError(400, 'CLASSIFIED_ATTRIBUTE_PARENT_OPTION_INVALID', 'A parent option does not belong to the dependency source', {
+        errors: [{ path: 'options', message: `All parent options must belong to "${source.title}"` }],
+      });
+    }
+  }
+  return source;
+}
+
 function enrichAttribute(item, categoryRows, selectedCategoryId = null) {
   const categoryPath = getCategoryPath(categoryRows, item.categoryId);
   return {
@@ -341,6 +545,14 @@ async function createClassifiedAttribute(data, req) {
   await assertCategory(attributeData.categoryId);
   await assertUniqueCode(attributeData.categoryId, attributeData.code);
   await assertCompatibleInheritance(attributeData);
+  await assertNoDependencyOverride(attributeData);
+  await assertAttributeDependency({
+    categoryId: attributeData.categoryId,
+    dependsOnAttributeId: attributeData.dependsOnAttributeId,
+    type: attributeData.type,
+    showInFilters: attributeData.showInFilters,
+    options,
+  });
   if (attributeData.isActive !== false) {
     await assertNoOperationalAdsInAttributeScopes(
       [attributeData.categoryId],
@@ -382,13 +594,43 @@ async function updateClassifiedAttribute(id, data, req) {
   const nextCategoryId = attributeData.categoryId ?? existing.categoryId;
   const nextCode = attributeData.code ?? existing.code;
   const nextType = attributeData.type ?? existing.type;
+  const nextShowInFilters = attributeData.showInFilters ?? existing.showInFilters;
+  const nextDependsOnAttributeId = Object.prototype.hasOwnProperty.call(attributeData, 'dependsOnAttributeId')
+    ? attributeData.dependsOnAttributeId
+    : existing.dependsOnAttributeId;
   await assertCategory(nextCategoryId);
   await assertUniqueCode(nextCategoryId, nextCode, id);
   await assertCompatibleInheritance({
     categoryId: nextCategoryId,
     code: nextCode,
     type: nextType,
+    showInFilters: nextShowInFilters,
     currentId: id,
+  });
+  await assertNoDependencyOverride({
+    categoryId: nextCategoryId,
+    code: nextCode,
+    currentId: id,
+  });
+  if (
+    Object.prototype.hasOwnProperty.call(attributeData, 'dependsOnAttributeId')
+    && comparableValue(nextDependsOnAttributeId) !== comparableValue(existing.dependsOnAttributeId)
+    && !optionsProvided
+    && existing.options.length
+  ) {
+    throw new AppError(
+      400,
+      'CLASSIFIED_ATTRIBUTE_OPTIONS_REQUIRED',
+      'Options must be submitted when changing an attribute dependency',
+      { errors: [{ path: 'options', message: 'Submit every option with its new parent mapping' }] },
+    );
+  }
+  await assertAttributeDependency({
+    categoryId: nextCategoryId,
+    dependsOnAttributeId: nextDependsOnAttributeId,
+    type: nextType,
+    currentId: id,
+    options: optionsProvided ? options : existing.options,
   });
 
   const identityChanged = ['categoryId', 'code', 'type'].some((field) => (
@@ -401,6 +643,33 @@ async function updateClassifiedAttribute(id, data, req) {
       'CLASSIFIED_ATTRIBUTE_IN_USE',
       'The category, code, or type of an attribute used by ads cannot be changed',
     );
+  }
+  if (existing._count.dependentAttributes > 0 && (
+    nextType !== 'SELECT'
+    || attributeData.isActive === false
+    || nextCategoryId !== existing.categoryId
+  )) {
+    throw new AppError(
+      409,
+      'CLASSIFIED_ATTRIBUTE_HAS_DEPENDENTS',
+      'A dependency source must remain an active single-select attribute in its category',
+    );
+  }
+  if (existing.showInFilters && attributeData.showInFilters === false) {
+    const filterDependentCount = await prisma.classifiedAttribute.count({
+      where: {
+        dependsOnAttributeId: id,
+        isActive: true,
+        showInFilters: true,
+      },
+    });
+    if (filterDependentCount > 0) {
+      throw new AppError(
+        409,
+        'CLASSIFIED_ATTRIBUTE_HAS_FILTER_DEPENDENTS',
+        'Filtering cannot be disabled while filterable attributes depend on this attribute',
+      );
+    }
   }
   if (hasAttributeContractChanges(existing, attributeData)) {
     await assertNoOperationalAdsInAttributeScopes(
@@ -441,12 +710,22 @@ async function updateClassifiedAttribute(id, data, req) {
       errors: [{ path: 'options', message: `The option "${usedRemovedOption.title}" is used by ads and cannot be removed` }],
     });
   }
+  const parentRemovedOption = removedOptions.find((option) => option._count.childOptions > 0);
+  if (parentRemovedOption) {
+    throw new AppError(409, 'CLASSIFIED_ATTRIBUTE_OPTION_HAS_DEPENDENTS', 'An option used by dependent options cannot be removed', {
+      errors: [{ path: 'options', message: `The option "${parentRemovedOption.title}" has dependent options` }],
+    });
+  }
   if (optionsProvided) {
     const unsafeOption = options.find((option) => {
       if (!option.id) return false;
       const before = existingOptionsById.get(option.id);
       if (!before || before._count.values === 0) return false;
-      return before.code !== option.code || before.isActive !== option.isActive;
+      return (
+        before.code !== option.code
+        || before.isActive !== option.isActive
+        || comparableValue(before.parentOptionId) !== comparableValue(option.parentOptionId)
+      );
     });
     if (unsafeOption) {
       throw new AppError(
@@ -522,6 +801,13 @@ async function deleteClassifiedAttribute(id, req) {
   if (existing._count.values > 0) {
     throw new AppError(409, 'CLASSIFIED_ATTRIBUTE_IN_USE', 'An attribute used by ads cannot be deleted');
   }
+  if (existing._count.dependentAttributes > 0) {
+    throw new AppError(
+      409,
+      'CLASSIFIED_ATTRIBUTE_HAS_DEPENDENTS',
+      'An attribute used as a dependency source cannot be deleted',
+    );
+  }
   if (existing.isActive) {
     await assertNoOperationalAdsInAttributeScopes(
       [existing.categoryId],
@@ -541,13 +827,32 @@ async function deleteClassifiedAttribute(id, req) {
 async function assertSelectionAttribute(attributeId) {
   const attribute = await prisma.classifiedAttribute.findUnique({
     where: { id: attributeId },
-    select: { id: true, title: true, type: true },
+    select: { id: true, title: true, type: true, dependsOnAttributeId: true },
   });
   if (!attribute) throw new AppError(404, 'NOT_FOUND', 'Classified attribute not found');
   if (!SELECT_TYPES.has(attribute.type)) {
     throw new AppError(409, 'CLASSIFIED_ATTRIBUTE_OPTIONS_NOT_ALLOWED', 'Options are only supported for selection attributes');
   }
   return attribute;
+}
+
+async function assertStandaloneOptionParent(attribute, parentOptionId) {
+  if (attribute.dependsOnAttributeId == null) {
+    if (parentOptionId != null) {
+      throw new AppError(400, 'CLASSIFIED_ATTRIBUTE_PARENT_OPTION_INVALID', 'This attribute does not have a dependency source');
+    }
+    return;
+  }
+  if (parentOptionId == null) {
+    throw new AppError(400, 'CLASSIFIED_ATTRIBUTE_PARENT_OPTION_REQUIRED', 'A parent option is required');
+  }
+  const parent = await prisma.classifiedAttributeOption.findFirst({
+    where: { id: parentOptionId, attributeId: attribute.dependsOnAttributeId },
+    select: { id: true },
+  });
+  if (!parent) {
+    throw new AppError(400, 'CLASSIFIED_ATTRIBUTE_PARENT_OPTION_INVALID', 'Parent option does not belong to the dependency source');
+  }
 }
 
 async function assertUniqueOptionCode(attributeId, code, currentId = null) {
@@ -582,7 +887,7 @@ async function getClassifiedAttributeOption(attributeId, optionId) {
     where: { id: optionId, attributeId },
     include: {
       attribute: { select: { id: true, title: true, type: true, categoryId: true } },
-      _count: { select: { values: true } },
+      _count: { select: { values: true, childOptions: true } },
     },
   });
   if (!item) throw new AppError(404, 'NOT_FOUND', 'Classified attribute option not found');
@@ -590,7 +895,8 @@ async function getClassifiedAttributeOption(attributeId, optionId) {
 }
 
 async function createClassifiedAttributeOption(attributeId, data, req) {
-  await assertSelectionAttribute(attributeId);
+  const attribute = await assertSelectionAttribute(attributeId);
+  await assertStandaloneOptionParent(attribute, data.parentOptionId);
   await assertUniqueOptionCode(attributeId, data.code);
   const created = await prisma.classifiedAttributeOption.create({
     data: { ...data, attributeId },
@@ -607,11 +913,21 @@ async function createClassifiedAttributeOption(attributeId, data, req) {
 
 async function updateClassifiedAttributeOption(attributeId, optionId, data, req) {
   const existing = await getClassifiedAttributeOption(attributeId, optionId);
-  await assertSelectionAttribute(attributeId);
+  const attribute = await assertSelectionAttribute(attributeId);
+  await assertStandaloneOptionParent(
+    attribute,
+    Object.prototype.hasOwnProperty.call(data, 'parentOptionId')
+      ? data.parentOptionId
+      : existing.parentOptionId,
+  );
   await assertUniqueOptionCode(attributeId, data.code, optionId);
   const changesUsedContract = existing._count.values > 0 && (
     (Object.prototype.hasOwnProperty.call(data, 'code') && data.code !== existing.code)
     || (Object.prototype.hasOwnProperty.call(data, 'isActive') && data.isActive !== existing.isActive)
+    || (
+      Object.prototype.hasOwnProperty.call(data, 'parentOptionId')
+      && comparableValue(data.parentOptionId) !== comparableValue(existing.parentOptionId)
+    )
   );
   if (changesUsedContract) {
     throw new AppError(
@@ -639,6 +955,13 @@ async function deleteClassifiedAttributeOption(attributeId, optionId, req) {
   const existing = await getClassifiedAttributeOption(attributeId, optionId);
   if (existing._count.values > 0) {
     throw new AppError(409, 'CLASSIFIED_ATTRIBUTE_OPTION_IN_USE', 'An option used by ads cannot be deleted');
+  }
+  if (existing._count.childOptions > 0) {
+    throw new AppError(
+      409,
+      'CLASSIFIED_ATTRIBUTE_OPTION_HAS_DEPENDENTS',
+      'An option used by dependent options cannot be deleted',
+    );
   }
   await prisma.classifiedAttributeOption.delete({ where: { id: optionId } });
   await audit(req, {

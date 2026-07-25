@@ -26,8 +26,32 @@ async function publicAds(req, res) {
 }
 
 async function publicAdDetail(req, res) {
-  const data = await service.getPublicAd(req.params.id);
+  const data = await service.getPublicAd(req.params.id, req.appUser?.id);
   return ok(res, { code: 'CLASSIFIED_PUBLIC_AD_DETAIL_SUCCESS', data });
+}
+
+async function favorites(req, res) {
+  const result = await service.listFavoriteAds(req.appUser, req.query);
+  return ok(res, {
+    code: 'CLASSIFIED_FAVORITE_LIST_SUCCESS',
+    data: result.items,
+    meta: result.meta,
+  });
+}
+
+async function addFavorite(req, res) {
+  const data = await service.addFavorite(req.appUser, req.params.id);
+  return ok(res, { code: 'CLASSIFIED_FAVORITE_ADD_SUCCESS', data });
+}
+
+async function removeFavorite(req, res) {
+  const data = await service.removeFavorite(req.appUser, req.params.id);
+  return ok(res, { code: 'CLASSIFIED_FAVORITE_REMOVE_SUCCESS', data });
+}
+
+async function createReport(req, res) {
+  const data = await service.createAdReport(req.appUser, req.params.id, req.body);
+  return ok(res, { code: 'CLASSIFIED_REPORT_CREATE_SUCCESS', data }, 201);
 }
 
 async function categoryAttributes(req, res) {
@@ -93,11 +117,14 @@ function action(method, code) {
 }
 
 module.exports = {
+  addFavorite,
   archive: action('archiveMyAd', 'CLASSIFIED_ARCHIVE_SUCCESS'),
   categoryAttributes,
   create,
+  createReport,
   deleteImage,
   detail,
+  favorites,
   list,
   markSold: action('markMyAdSold', 'CLASSIFIED_MARK_SOLD_SUCCESS'),
   pause: action('pauseMyAd', 'CLASSIFIED_PAUSE_SUCCESS'),
@@ -109,6 +136,7 @@ module.exports = {
   readiness,
   renew: action('renewMyAd', 'CLASSIFIED_RENEW_SUCCESS'),
   reorderImages,
+  removeFavorite,
   resume: action('resumeMyAd', 'CLASSIFIED_RESUME_SUCCESS'),
   saveAttributes,
   submit: action('submitMyAd', 'CLASSIFIED_SUBMIT_SUCCESS'),

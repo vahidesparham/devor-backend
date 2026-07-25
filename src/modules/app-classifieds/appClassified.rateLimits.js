@@ -45,10 +45,16 @@ const actionLimiter = createLimiter({
   limit: 40,
   message: 'Too many classified lifecycle actions. Please try again later.',
 });
+const reportLimiter = createLimiter({
+  windowMs: 60 * 60 * 1000,
+  limit: 10,
+  message: 'Too many classified reports. Please try again later.',
+});
 
 module.exports = {
   actionLimiter,
   createAdLimiter,
   imageLimiter,
   mutationLimiter,
+  reportLimiter,
 };

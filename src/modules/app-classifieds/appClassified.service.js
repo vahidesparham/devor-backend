@@ -84,6 +84,7 @@ function mapAttribute(attribute) {
   return {
     id: attribute.id,
     categoryId: attribute.categoryId,
+    dependsOnAttributeId: attribute.dependsOnAttributeId,
     code: attribute.code,
     title: attribute.title,
     type: attribute.type,
@@ -98,6 +99,7 @@ function mapAttribute(attribute) {
     maxLength: attribute.maxLength,
     options: (attribute.options || []).map((option) => ({
       id: option.id,
+      parentOptionId: option.parentOptionId,
       code: option.code,
       title: option.title,
       image: option.image,
@@ -121,9 +123,12 @@ function mapAttributeValue(value) {
       title: value.attribute.title,
       type: value.attribute.type,
       unit: value.attribute.unit,
+      displayOrder: value.attribute.displayOrder,
+      dependsOnAttributeId: value.attribute.dependsOnAttributeId,
     } : undefined,
     option: value.option ? {
       id: value.option.id,
+      parentOptionId: value.option.parentOptionId,
       code: value.option.code,
       title: value.option.title,
       image: value.option.image,
@@ -151,6 +156,7 @@ function mapSummary(ad) {
     expiresAt: ad.expiresAt,
     soldAt: ad.soldAt,
     archivedAt: ad.archivedAt,
+    moderationNote: ad.moderationNote,
     postingPayment: {
       categoryFee: toNumber(ad.category?.postingFee) || 0,
       paidFee: toNumber(ad.postingFee) || 0,
@@ -299,6 +305,7 @@ async function buildPublicAttributeWhere(categoryId, filters) {
   if (!filters?.length) return [];
   const { attributes } = await getPublicFilterAttributes(categoryId);
   const byId = new Map(attributes.map((attribute) => [attribute.id, attribute]));
+  const filtersByAttributeId = new Map(filters.map((filter) => [filter.attributeId, filter]));
 
   return filters.map((filter) => {
     const attribute = byId.get(filter.attributeId);
@@ -322,6 +329,23 @@ async function buildPublicAttributeWhere(categoryId, filters) {
           filter.attributeId,
           'One or more classified attribute options are invalid',
         );
+      }
+      if (attribute.dependsOnAttributeId != null) {
+        const parentFilter = filtersByAttributeId.get(attribute.dependsOnAttributeId);
+        if (!parentFilter?.optionIds?.length) {
+          invalidPublicAttributeFilter(
+            filter.attributeId,
+            'Select the parent attribute before filtering by this dependent attribute',
+          );
+        }
+        const selectedOptions = attribute.options.filter((option) => filter.optionIds.includes(option.id));
+        const parentOptionIds = new Set(parentFilter.optionIds);
+        if (selectedOptions.some((option) => !parentOptionIds.has(option.parentOptionId))) {
+          invalidPublicAttributeFilter(
+            filter.attributeId,
+            'A dependent option does not match the selected parent option',
+          );
+        }
       }
       return {
         attributeValues: {
@@ -428,7 +452,7 @@ async function listPublicAds(query) {
   };
 }
 
-async function getPublicAd(id) {
+async function getPublicAd(id, appUserId = null) {
   const now = new Date();
   const ad = await prisma.classifiedAd.findFirst({
     where: {
@@ -474,6 +498,8 @@ async function getPublicAd(id) {
               title: true,
               type: true,
               unit: true,
+              displayOrder: true,
+              dependsOnAttributeId: true,
             },
           },
           option: {
@@ -483,6 +509,7 @@ async function getPublicAd(id) {
               title: true,
               image: true,
               color: true,
+              parentOptionId: true,
             },
           },
         },
@@ -497,7 +524,213 @@ async function getPublicAd(id) {
       'Classified ad not found',
     );
   }
-  return mapPublicDetail(ad);
+  const [favorite, activeReport] = appUserId
+    ? await Promise.all([
+      prisma.classifiedFavorite.findUnique({
+        where: {
+          appUserId_adId: {
+            appUserId: Number(appUserId),
+            adId: ad.id,
+          },
+        },
+        select: { appUserId: true },
+      }),
+      prisma.classifiedReport.findFirst({
+        where: {
+          adId: ad.id,
+          reporterAppUserId: Number(appUserId),
+          status: { in: ['OPEN', 'REVIEWING'] },
+        },
+        select: { id: true },
+      }),
+    ])
+    : [null, null];
+  return {
+    ...mapPublicDetail(ad),
+    isFavorite: Boolean(favorite),
+    hasReported: Boolean(activeReport),
+    canReport: !appUserId || ad.appUserId !== Number(appUserId),
+  };
+}
+
+async function createAdReport(appUser, id, input) {
+  const adId = Number(id);
+  const now = new Date();
+  const result = await prisma.$transaction(async (tx) => {
+    const lockedAds = await tx.$queryRaw`
+      SELECT id
+      FROM ClassifiedAd
+      WHERE id = ${adId}
+      FOR UPDATE
+    `;
+    if (!lockedAds.length) {
+      throw new AppError(404, 'CLASSIFIED_NOT_FOUND', 'Classified ad not found');
+    }
+    const ad = await tx.classifiedAd.findFirst({
+      where: {
+        id: adId,
+        status: STATUSES.PUBLISHED,
+        deletedAt: null,
+        publishedAt: { not: null },
+        OR: [{ expiresAt: null }, { expiresAt: { gt: now } }],
+      },
+      select: { id: true, appUserId: true },
+    });
+    if (!ad) {
+      throw new AppError(404, 'CLASSIFIED_NOT_FOUND', 'Classified ad not found');
+    }
+    if (ad.appUserId === appUser.id) {
+      throw new AppError(
+        409,
+        'CLASSIFIED_OWN_REPORT_FORBIDDEN',
+        'You cannot report your own classified ad',
+      );
+    }
+
+    const existing = await tx.classifiedReport.findFirst({
+      where: {
+        adId,
+        reporterAppUserId: appUser.id,
+        status: { in: ['OPEN', 'REVIEWING'] },
+      },
+      select: { id: true },
+    });
+    if (existing) {
+      throw new AppError(
+        409,
+        'CLASSIFIED_REPORT_ALREADY_EXISTS',
+        'You have already reported this classified ad',
+      );
+    }
+
+    const report = await tx.classifiedReport.create({
+      data: {
+        adId,
+        reporterAppUserId: appUser.id,
+        reasonCode: input.reasonCode,
+        description: input.description || null,
+      },
+      select: {
+        id: true,
+        reasonCode: true,
+        status: true,
+        createdAt: true,
+      },
+    });
+    await tx.classifiedAd.update({
+      where: { id: adId },
+      data: { reportCount: { increment: 1 } },
+    });
+    return report;
+  });
+
+  return result;
+}
+
+async function addFavorite(appUser, id) {
+  await getPublicAd(id);
+  const adId = Number(id);
+  const favoriteCount = await prisma.$transaction(async (tx) => {
+    await tx.classifiedFavorite.upsert({
+      where: {
+        appUserId_adId: {
+          appUserId: appUser.id,
+          adId,
+        },
+      },
+      update: {},
+      create: {
+        appUserId: appUser.id,
+        adId,
+      },
+    });
+    const count = await tx.classifiedFavorite.count({ where: { adId } });
+    await tx.classifiedAd.update({
+      where: { id: adId },
+      data: { favoriteCount: count },
+    });
+    return count;
+  });
+  return { adId, isFavorite: true, favoriteCount };
+}
+
+async function removeFavorite(appUser, id) {
+  const adId = Number(id);
+  const favoriteCount = await prisma.$transaction(async (tx) => {
+    await tx.classifiedFavorite.deleteMany({
+      where: {
+        appUserId: appUser.id,
+        adId,
+      },
+    });
+    const count = await tx.classifiedFavorite.count({ where: { adId } });
+    const exists = await tx.classifiedAd.findUnique({
+      where: { id: adId },
+      select: { id: true },
+    });
+    if (exists) {
+      await tx.classifiedAd.update({
+        where: { id: adId },
+        data: { favoriteCount: count },
+      });
+    }
+    return count;
+  });
+  return { adId, isFavorite: false, favoriteCount };
+}
+
+async function listFavoriteAds(appUser, query) {
+  const now = new Date();
+  const where = {
+    appUserId: appUser.id,
+    ad: {
+      status: STATUSES.PUBLISHED,
+      deletedAt: null,
+      publishedAt: { not: null },
+      OR: [{ expiresAt: null }, { expiresAt: { gt: now } }],
+    },
+  };
+  const skip = (query.page - 1) * query.pageSize;
+  const [rows, total] = await Promise.all([
+    prisma.classifiedFavorite.findMany({
+      where,
+      skip,
+      take: query.pageSize,
+      orderBy: [{ createdAt: 'desc' }, { adId: 'desc' }],
+      select: {
+        ad: {
+          include: {
+            category: true,
+            city: { select: { id: true, title: true } },
+            area: { select: { id: true, title: true } },
+            images: {
+              orderBy: [
+                { isCover: 'desc' },
+                { displayOrder: 'asc' },
+                { id: 'asc' },
+              ],
+              take: 1,
+            },
+          },
+        },
+      },
+    }),
+    prisma.classifiedFavorite.count({ where }),
+  ]);
+  const items = rows.map((row) => ({
+    ...mapPublicSummary(row.ad),
+    isFavorite: true,
+  }));
+  return {
+    items,
+    meta: {
+      page: query.page,
+      pageSize: query.pageSize,
+      total,
+      pageCount: Math.ceil(total / query.pageSize),
+      hasNext: skip + items.length < total,
+    },
+  };
 }
 
 function mapDetail(ad, resolvedAttributes = null) {
@@ -551,8 +784,27 @@ function detailInclude() {
     attributeValues: {
       orderBy: [{ attributeId: 'asc' }, { id: 'asc' }],
       include: {
-        attribute: { select: { id: true, code: true, title: true, type: true, unit: true } },
-        option: { select: { id: true, code: true, title: true, image: true, color: true } },
+        attribute: {
+          select: {
+            id: true,
+            code: true,
+            title: true,
+            type: true,
+            unit: true,
+            displayOrder: true,
+            dependsOnAttributeId: true,
+          },
+        },
+        option: {
+          select: {
+            id: true,
+            code: true,
+            title: true,
+            image: true,
+            color: true,
+            parentOptionId: true,
+          },
+        },
       },
     },
     statusHistory: { orderBy: { createdAt: 'desc' }, take: 50 },
@@ -620,7 +872,19 @@ async function getResolvedAttributes(categoryId, categoryRows = null) {
       },
     },
   });
-  return resolveInheritedClassifiedAttributes(rows, attributes, categoryId);
+  const resolved = resolveInheritedClassifiedAttributes(rows, attributes, categoryId);
+  const remaining = [...resolved];
+  const ordered = [];
+  const allIds = new Set(resolved.map((attribute) => attribute.id));
+  while (remaining.length) {
+    const index = remaining.findIndex((attribute) => (
+      attribute.dependsOnAttributeId == null
+      || !allIds.has(attribute.dependsOnAttributeId)
+      || ordered.some((parent) => parent.id === attribute.dependsOnAttributeId)
+    ));
+    ordered.push(remaining.splice(index < 0 ? 0 : index, 1)[0]);
+  }
+  return ordered;
 }
 
 async function assertLocation(countryId, cityId, areaId) {
@@ -1051,6 +1315,34 @@ async function updateMyAd(appUser, id, data) {
 
 function typedRows(attributes, submittedValues) {
   const byId = new Map(attributes.map((attribute) => [attribute.id, attribute]));
+  const submittedByAttributeId = new Map(
+    submittedValues.map((input) => [input.attributeId, input]),
+  );
+  for (const input of submittedValues) {
+    const attribute = byId.get(input.attributeId);
+    if (!attribute?.dependsOnAttributeId || !input.optionIds?.length) continue;
+    const parentInput = submittedByAttributeId.get(attribute.dependsOnAttributeId);
+    const selectedParentOptionIds = new Set(parentInput?.optionIds || []);
+    if (!selectedParentOptionIds.size) {
+      throw new AppError(400, 'CLASSIFIED_ATTRIBUTE_DEPENDENCY_REQUIRED', 'Select the parent attribute first', {
+        errors: [{
+          path: `attributes.${attribute.code}`,
+          message: 'Select the parent attribute before choosing this value',
+        }],
+      });
+    }
+    const optionsById = new Map((attribute.options || []).map((option) => [option.id, option]));
+    if (input.optionIds.some((optionId) => (
+      !selectedParentOptionIds.has(optionsById.get(optionId)?.parentOptionId)
+    ))) {
+      throw new AppError(400, 'CLASSIFIED_ATTRIBUTE_DEPENDENCY_MISMATCH', 'Dependent attribute value does not match its parent', {
+        errors: [{
+          path: `attributes.${attribute.code}`,
+          message: 'Choose a value that belongs to the selected parent option',
+        }],
+      });
+    }
+  }
   const rows = [];
   for (const input of submittedValues) {
     const attribute = byId.get(input.attributeId);
@@ -1555,8 +1847,10 @@ function archiveMyAd(appUser, id, expectedVersion) {
 }
 
 module.exports = {
+  addFavorite,
   archiveMyAd,
   createDraft,
+  createAdReport,
   deleteAdImage,
   getCategoryAttributes,
   getPublicCategoryFilters,
@@ -1566,11 +1860,13 @@ module.exports = {
   getPostingConfig,
   listPublicAds,
   listPublicCategories,
+  listFavoriteAds,
   listMyAds,
   markMyAdSold,
   pauseMyAd,
   renewMyAd,
   reorderAdImages,
+  removeFavorite,
   resumeMyAd,
   saveAttributeValues,
   submitMyAd,

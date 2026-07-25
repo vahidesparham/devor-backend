@@ -230,10 +230,10 @@ async function seedLocationAndOwner() {
     },
   });
   const owner = await prisma.appUser.upsert({
-    where: { phone: "+992900002200" },
+    where: { phone: "+992900009900" },
     update: { firstName: "کاربر", lastName: "آگهی", isActive: true },
     create: {
-      phone: "+992900002200",
+      phone: "+992900009900",
       countryCode: "TJ",
       phoneCode: "+992",
       firstName: "کاربر",
@@ -269,7 +269,7 @@ async function seedAds(categoryByCode, context) {
       price: template.price,
       currency: "TJS",
       contactName: "کاربر آگهی",
-      contactPhone: "+992 90 000 22 00",
+      contactPhone: "+992 90 000 99 00",
       allowPhone: true,
       allowChat: false,
       status: "PUBLISHED",

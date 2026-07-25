@@ -30,12 +30,28 @@ function numericDemoValue(attribute, sequence) {
 
 function demoRows(ad, attributes, sequence) {
   const rows = [];
+  const selectedOptionByAttributeId = new Map();
   for (const attribute of attributes) {
     if (!attribute.showInFilters) continue;
 
     if (attribute.type === 'SELECT' || attribute.type === 'MULTI_SELECT') {
-      if (!attribute.options.length) continue;
-      const option = attribute.options[sequence % attribute.options.length];
+      const availableOptions = attribute.dependsOnAttributeId
+        ? attribute.options.filter((option) => (
+          option.parentOptionId === selectedOptionByAttributeId.get(attribute.dependsOnAttributeId)
+        ))
+        : attribute.options;
+      if (!availableOptions.length) continue;
+      const preferredCode = attribute.code === 'car_brand'
+        ? 'toyota'
+        : attribute.code === 'car_model'
+          ? 'camry'
+          : null;
+      const option = (
+        preferredCode
+          ? availableOptions.find((item) => item.code === preferredCode)
+          : null
+      ) || availableOptions[sequence % availableOptions.length];
+      selectedOptionByAttributeId.set(attribute.id, option.id);
       rows.push({
         adId: ad.id,
         attributeId: attribute.id,

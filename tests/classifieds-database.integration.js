@@ -224,3 +224,93 @@ test('classified taxonomy services enforce hierarchy and inherited attribute con
     await prisma.auditLog.deleteMany({ where: { traceId } });
   }
 });
+
+test('classified attribute services persist and protect dependent option mappings', async () => {
+  const suffix = `${Date.now()}_${Math.floor(Math.random() * 10000)}`;
+  const traceId = `classified-dependency-test-${suffix}`;
+  const req = {
+    admin: null,
+    traceId,
+    method: 'TEST',
+    originalUrl: '/tests/classified-dependencies',
+    ip: '127.0.0.1',
+    get: () => null,
+  };
+  let category;
+  let brand;
+  let model;
+
+  try {
+    category = await categoryService.createClassifiedCategory({
+      parentId: null,
+      code: `dependency_${suffix}`,
+      slug: `dependency-${suffix.replace(/_/g, '-')}`,
+      title: `Dependency ${suffix}`,
+      description: null,
+      image: null,
+      color: '#0f766e',
+      displayOrder: 10,
+      isActive: true,
+      allowAds: true,
+      postingFee: 0,
+    }, req);
+    brand = await attributeService.createClassifiedAttribute({
+      categoryId: category.id,
+      code: `brand_${suffix}`,
+      title: 'Brand',
+      type: 'SELECT',
+      isRequired: true,
+      showInFilters: true,
+      displayOrder: 10,
+      isActive: true,
+      options: [
+        { code: `toyota_${suffix}`, title: 'Toyota', displayOrder: 10, isActive: true },
+        { code: `hyundai_${suffix}`, title: 'Hyundai', displayOrder: 20, isActive: true },
+      ],
+    }, req);
+    model = await attributeService.createClassifiedAttribute({
+      categoryId: category.id,
+      dependsOnAttributeId: brand.id,
+      code: `model_${suffix}`,
+      title: 'Model',
+      type: 'SELECT',
+      isRequired: true,
+      showInFilters: true,
+      displayOrder: 20,
+      isActive: true,
+      options: [{
+        code: `camry_${suffix}`,
+        title: 'Camry',
+        parentOptionId: brand.options[0].id,
+        displayOrder: 10,
+        isActive: true,
+      }],
+    }, req);
+
+    assert.equal(model.dependsOnAttributeId, brand.id);
+    assert.equal(model.options[0].parentOptionId, brand.options[0].id);
+    assert.equal(model.dependsOnAttribute.title, 'Brand');
+
+    await assert.rejects(
+      attributeService.deleteClassifiedAttribute(brand.id, req),
+      (error) => error.code === 'CLASSIFIED_ATTRIBUTE_HAS_DEPENDENTS',
+    );
+    await assert.rejects(
+      attributeService.updateClassifiedAttribute(brand.id, {
+        options: [brand.options[1]],
+      }, req),
+      (error) => error.code === 'CLASSIFIED_ATTRIBUTE_OPTION_HAS_DEPENDENTS',
+    );
+  } finally {
+    if (model?.id) {
+      await prisma.classifiedAttribute.delete({ where: { id: model.id } }).catch(() => {});
+    }
+    if (brand?.id) {
+      await prisma.classifiedAttribute.delete({ where: { id: brand.id } }).catch(() => {});
+    }
+    if (category?.id) {
+      await prisma.classifiedCategory.delete({ where: { id: category.id } }).catch(() => {});
+    }
+    await prisma.auditLog.deleteMany({ where: { traceId } });
+  }
+});

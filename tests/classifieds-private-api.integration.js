@@ -363,6 +363,66 @@ test('private classified API enforces ownership, typed data, images, versions, a
       }),
     ]);
 
+    const reportStateBefore = await request(`/ads/${createdIds.ad}`, {
+      token: strangerToken,
+    });
+    assert.equal(reportStateBefore.status, 200);
+    assert.equal(reportStateBefore.payload.data.hasReported, false);
+    assert.equal(reportStateBefore.payload.data.canReport, true);
+
+    const ownReport = await request(`/ads/${createdIds.ad}/reports`, {
+      method: 'POST',
+      body: { reasonCode: 'MISLEADING' },
+    });
+    assert.equal(ownReport.status, 409);
+    assert.equal(ownReport.payload.code, 'CLASSIFIED_OWN_REPORT_FORBIDDEN');
+
+    const invalidOtherReport = await request(
+      `/ads/${createdIds.ad}/reports`,
+      {
+        token: strangerToken,
+        method: 'POST',
+        body: { reasonCode: 'OTHER', description: 'short' },
+      },
+    );
+    assert.equal(invalidOtherReport.status, 400);
+    assert.equal(invalidOtherReport.payload.code, 'VALIDATION_ERROR');
+
+    const reportResult = await request(`/ads/${createdIds.ad}/reports`, {
+      token: strangerToken,
+      method: 'POST',
+      body: {
+        reasonCode: 'OTHER',
+        description: 'The contact information appears to be inaccurate.',
+      },
+    });
+    assert.equal(reportResult.status, 201);
+    assert.equal(reportResult.payload.data.status, 'OPEN');
+    assert.equal(reportResult.payload.data.reasonCode, 'OTHER');
+
+    const duplicateReport = await request(`/ads/${createdIds.ad}/reports`, {
+      token: strangerToken,
+      method: 'POST',
+      body: { reasonCode: 'FRAUD' },
+    });
+    assert.equal(duplicateReport.status, 409);
+    assert.equal(
+      duplicateReport.payload.code,
+      'CLASSIFIED_REPORT_ALREADY_EXISTS',
+    );
+
+    const reportStateAfter = await request(`/ads/${createdIds.ad}`, {
+      token: strangerToken,
+    });
+    assert.equal(reportStateAfter.status, 200);
+    assert.equal(reportStateAfter.payload.data.hasReported, true);
+
+    const reportedAd = await prisma.classifiedAd.findUnique({
+      where: { id: createdIds.ad },
+      select: { reportCount: true },
+    });
+    assert.equal(reportedAd.reportCount, 1);
+
     const pauseResult = await request(`/my-ads/${createdIds.ad}/actions/pause`, {
       method: 'POST',
       body: { expectedVersion: 9 },
@@ -450,6 +510,7 @@ test('private classified API enforces ownership, typed data, images, versions, a
     const listResult = await request('/my-ads?status=ARCHIVED');
     assert.equal(listResult.status, 200);
     assert.equal(listResult.payload.data.some((item) => item.id === createdIds.ad), true);
+    assert.equal(Object.hasOwn(listResult.payload.data[0], 'moderationNote'), true);
     assert.equal(listResult.payload.meta.total, 1);
 
     const draftLimit = configResult.payload.data.adLimits.maxDrafts;

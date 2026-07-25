@@ -247,6 +247,46 @@ test('classified readiness rejects rows that mix typed value representations', (
   );
 });
 
+test('classified readiness enforces dependent option consistency', () => {
+  const base = readyFixture();
+  const attributes = [
+    ...base.attributes,
+    {
+      id: 12,
+      code: 'model',
+      title: 'Model',
+      type: 'SELECT',
+      isRequired: true,
+      isActive: true,
+      dependsOnAttributeId: 10,
+      options: [
+        { id: 120, parentOptionId: 100 },
+        { id: 121, parentOptionId: 101 },
+      ],
+    },
+  ];
+  const valid = evaluateClassifiedReadiness(readyFixture({
+    attributes,
+    values: [
+      ...base.values,
+      { attributeId: 12, optionId: 120 },
+    ],
+  }));
+  assert.equal(valid.ready, true);
+
+  const invalid = evaluateClassifiedReadiness(readyFixture({
+    attributes,
+    values: [
+      ...base.values,
+      { attributeId: 12, optionId: 121 },
+    ],
+  }));
+  assert.equal(
+    invalid.issues.some((item) => item.code === 'CLASSIFIED_ATTRIBUTE_DEPENDENCY_MISMATCH'),
+    true,
+  );
+});
+
 test('classified settings validation catches unsafe limits', () => {
   assert.deepEqual(validateClassifiedSettings(DEFAULT_CLASSIFIED_SETTINGS), []);
   const issues = validateClassifiedSettings({

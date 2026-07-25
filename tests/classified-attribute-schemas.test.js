@@ -54,3 +54,30 @@ test('classified attribute rejects options for a non-selection type', () => {
   assert.equal(result.success, false);
   assert.deepEqual(result.error.issues[0].path, ['options']);
 });
+
+test('classified attribute accepts dependent options with parent mappings', () => {
+  const result = createClassifiedAttributeSchema.parse(baseAttribute({
+    code: 'model',
+    dependsOnAttributeId: 9,
+    options: [
+      {
+        code: 'camry',
+        title: 'Camry',
+        parentOptionId: 91,
+      },
+    ],
+  }));
+
+  assert.equal(result.dependsOnAttributeId, 9);
+  assert.equal(result.options[0].parentOptionId, 91);
+});
+
+test('classified attribute requires a parent mapping for dependent options', () => {
+  const result = createClassifiedAttributeSchema.safeParse(baseAttribute({
+    code: 'model',
+    dependsOnAttributeId: 9,
+  }));
+
+  assert.equal(result.success, false);
+  assert.deepEqual(result.error.issues[0].path, ['options', 0, 'parentOptionId']);
+});

@@ -13,6 +13,10 @@ const nullableNonNegativeInt = z.preprocess((value) => {
   if (value === '' || value === null || value === undefined) return null;
   return value;
 }, z.coerce.number().int().min(0).nullable().optional());
+const nullablePositiveInt = z.preprocess((value) => {
+  if (value === '' || value === null || value === undefined) return null;
+  return value;
+}, z.coerce.number().int().positive().nullable().optional());
 const optionalBoolean = z.preprocess((value) => {
   if (value === undefined || value === '') return undefined;
   if (value === 'true') return true;
@@ -23,6 +27,7 @@ const optionalBoolean = z.preprocess((value) => {
 const optionBodySchema = z.object({
   code: keySchema,
   title: z.string().trim().min(1).max(160),
+  parentOptionId: nullablePositiveInt,
   image: nullableString(500),
   color: nullableString(30),
   displayOrder: z.coerce.number().int().min(0).optional().default(0),
@@ -35,6 +40,7 @@ const inlineOptionSchema = optionBodySchema.extend({
 
 const baseAttributeSchema = z.object({
   categoryId: z.coerce.number().int().positive(),
+  dependsOnAttributeId: nullablePositiveInt,
   code: keySchema,
   title: z.string().trim().min(2).max(160),
   type: z.enum(['SELECT', 'MULTI_SELECT', 'TEXT', 'NUMBER', 'BOOLEAN']),
@@ -61,9 +67,30 @@ function refineAttribute(data, ctx) {
   if (data.options?.length && data.type && !['SELECT', 'MULTI_SELECT'].includes(data.type)) {
     ctx.addIssue({ code: 'custom', path: ['options'], message: 'Options are only supported for selection attributes' });
   }
+  if (data.dependsOnAttributeId != null && data.type && !['SELECT', 'MULTI_SELECT'].includes(data.type)) {
+    ctx.addIssue({
+      code: 'custom',
+      path: ['dependsOnAttributeId'],
+      message: 'Only selection attributes can depend on another attribute',
+    });
+  }
 
   const optionCodes = new Map();
   for (const [index, option] of (data.options || []).entries()) {
+    if (data.dependsOnAttributeId != null && option.parentOptionId == null) {
+      ctx.addIssue({
+        code: 'custom',
+        path: ['options', index, 'parentOptionId'],
+        message: 'A parent option is required for every dependent option',
+      });
+    }
+    if (data.dependsOnAttributeId == null && option.parentOptionId != null) {
+      ctx.addIssue({
+        code: 'custom',
+        path: ['options', index, 'parentOptionId'],
+        message: 'Parent options require a dependent attribute',
+      });
+    }
     const existingIndex = optionCodes.get(option.code);
     if (existingIndex !== undefined) {
       ctx.addIssue({

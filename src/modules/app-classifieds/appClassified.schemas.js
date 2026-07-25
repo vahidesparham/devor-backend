@@ -12,6 +12,14 @@ const statusSchema = z.enum([
   'SUSPENDED',
 ]);
 const priceTypeSchema = z.enum(['FIXED', 'NEGOTIABLE', 'FREE', 'CONTACT']);
+const reportReasonSchema = z.enum([
+  'MISLEADING',
+  'PROHIBITED',
+  'FRAUD',
+  'DUPLICATE',
+  'UNAVAILABLE',
+  'OTHER',
+]);
 const nullablePositiveInt = z.preprocess((value) => {
   if (value === undefined || value === '' || value === null) return null;
   return value;
@@ -186,6 +194,10 @@ const publicAdListSchema = z.object({
     });
   }
 });
+const favoriteAdListSchema = z.object({
+  page: z.coerce.number().int().min(1).optional().default(1),
+  pageSize: z.coerce.number().int().min(1).max(50).optional().default(20),
+});
 const publicCategoryListSchema = z.object({
   parentId: z.coerce.number().int().positive().optional(),
 });
@@ -229,6 +241,21 @@ const imageDeleteQuerySchema = z.object({
 const actionBodySchema = z.object({
   expectedVersion: z.coerce.number().int().positive(),
 }).strict();
+const createReportSchema = z.object({
+  reasonCode: reportReasonSchema,
+  description: z.preprocess(
+    (value) => (value === '' || value === null ? null : value),
+    z.string().trim().max(1000).nullable().optional(),
+  ),
+}).strict().superRefine((data, ctx) => {
+  if (data.reasonCode === 'OTHER' && (data.description?.length || 0) < 10) {
+    ctx.addIssue({
+      code: 'custom',
+      path: ['description'],
+      message: 'Please describe the issue in at least 10 characters',
+    });
+  }
+});
 const idParamSchema = z.object({ id: z.coerce.number().int().positive() });
 const imageParamSchema = z.object({
   id: z.coerce.number().int().positive(),
@@ -242,6 +269,8 @@ module.exports = {
   actionBodySchema,
   categoryParamSchema,
   createAdSchema,
+  createReportSchema,
+  favoriteAdListSchema,
   idParamSchema,
   imageDeleteQuerySchema,
   imageParamSchema,

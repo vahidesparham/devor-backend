@@ -5,7 +5,7 @@ dotenv.config();
 
 const prisma = new PrismaClient();
 
-const option = (code, title) => ({ code, title });
+const option = (code, title, config = {}) => ({ code, title, ...config });
 
 const select = (code, title, options, config = {}) => ({
   code,
@@ -275,7 +275,43 @@ const taxonomy = [
               ],
               { isRequired: true, showInFilters: true },
             ),
-            text("car_model", "مدل", { isRequired: true, minLength: 1, maxLength: 80 }),
+            select(
+              "car_model",
+              "مدل",
+              [
+                option("corolla", "کرولا", { parentOptionCode: "toyota" }),
+                option("camry", "کمری", { parentOptionCode: "toyota" }),
+                option("rav4", "راوفور", { parentOptionCode: "toyota" }),
+                option("elantra", "النترا", { parentOptionCode: "hyundai" }),
+                option("sonata", "سوناتا", { parentOptionCode: "hyundai" }),
+                option("tucson", "توسان", { parentOptionCode: "hyundai" }),
+                option("c-class", "کلاس C", { parentOptionCode: "mercedes-benz" }),
+                option("e-class", "کلاس E", { parentOptionCode: "mercedes-benz" }),
+                option("gle", "GLE", { parentOptionCode: "mercedes-benz" }),
+                option("astra", "آسترا", { parentOptionCode: "opel" }),
+                option("insignia", "اینسینیـا", { parentOptionCode: "opel" }),
+                option("3-series", "سری 3", { parentOptionCode: "bmw" }),
+                option("5-series", "سری 5", { parentOptionCode: "bmw" }),
+                option("x5", "X5", { parentOptionCode: "bmw" }),
+                option("rx", "RX", { parentOptionCode: "lexus" }),
+                option("lx", "LX", { parentOptionCode: "lexus" }),
+                option("rio", "ریو", { parentOptionCode: "kia" }),
+                option("k5", "K5", { parentOptionCode: "kia" }),
+                option("sportage", "اسپورتیج", { parentOptionCode: "kia" }),
+                option("niva", "نیوا", { parentOptionCode: "lada" }),
+                option("vesta", "وستا", { parentOptionCode: "lada" }),
+                option("tiggo-7", "تیگو 7", { parentOptionCode: "chery" }),
+                option("arrizo-6", "آریزو 6", { parentOptionCode: "chery" }),
+                option("song-plus", "Song Plus", { parentOptionCode: "byd" }),
+                option("han", "Han", { parentOptionCode: "byd" }),
+                option("other-model", "سایر", { parentOptionCode: "other" }),
+              ],
+              {
+                dependsOnCode: "car_brand",
+                isRequired: true,
+                showInFilters: true,
+              },
+            ),
             number("production_year", "سال تولید", {
               isRequired: true,
               showInFilters: true,
@@ -858,8 +894,9 @@ function validateTaxonomy() {
   for (const root of taxonomy) visit(root);
 }
 
-function attributeData(attribute, displayOrder) {
+function attributeData(attribute, displayOrder, dependsOnAttributeId = null) {
   return {
+    dependsOnAttributeId,
     title: attribute.title,
     type: attribute.type,
     unit: attribute.unit || null,
@@ -875,8 +912,14 @@ function attributeData(attribute, displayOrder) {
   };
 }
 
-async function upsertAttribute(categoryId, definition, displayOrder) {
-  const data = attributeData(definition, displayOrder);
+async function upsertAttribute(categoryId, definition, displayOrder, availableAttributes) {
+  const dependency = definition.dependsOnCode
+    ? availableAttributes.get(definition.dependsOnCode)
+    : null;
+  if (definition.dependsOnCode && !dependency) {
+    throw new Error(`Missing dependency ${definition.dependsOnCode} for ${definition.code}`);
+  }
+  const data = attributeData(definition, displayOrder, dependency?.id || null);
   const attribute = await prisma.classifiedAttribute.upsert({
     where: {
       categoryId_code: {
@@ -892,11 +935,27 @@ async function upsertAttribute(categoryId, definition, displayOrder) {
     },
   });
 
-  if (definition.type !== "SELECT" && definition.type !== "MULTI_SELECT") return;
+  availableAttributes.set(definition.code, attribute);
+  if (definition.type !== "SELECT" && definition.type !== "MULTI_SELECT") return attribute;
+
+  const parentOptionsByCode = dependency
+    ? new Map(
+      (await prisma.classifiedAttributeOption.findMany({
+        where: { attributeId: dependency.id },
+        select: { id: true, code: true },
+      })).map((item) => [item.code, item.id]),
+    )
+    : new Map();
 
   const activeCodes = [];
   for (let index = 0; index < definition.options.length; index += 1) {
     const item = definition.options[index];
+    const parentOptionId = item.parentOptionCode
+      ? parentOptionsByCode.get(item.parentOptionCode)
+      : null;
+    if (item.parentOptionCode && !parentOptionId) {
+      throw new Error(`Missing parent option ${item.parentOptionCode} for ${definition.code}.${item.code}`);
+    }
     activeCodes.push(item.code);
     await prisma.classifiedAttributeOption.upsert({
       where: {
@@ -907,6 +966,7 @@ async function upsertAttribute(categoryId, definition, displayOrder) {
       },
       update: {
         title: item.title,
+        parentOptionId,
         displayOrder: (index + 1) * 10,
         isActive: true,
       },
@@ -914,6 +974,7 @@ async function upsertAttribute(categoryId, definition, displayOrder) {
         attributeId: attribute.id,
         code: item.code,
         title: item.title,
+        parentOptionId,
         displayOrder: (index + 1) * 10,
         isActive: true,
       },
@@ -927,6 +988,7 @@ async function upsertAttribute(categoryId, definition, displayOrder) {
     },
     data: { isActive: false },
   });
+  return attribute;
 }
 
 async function upsertCategoryTree(definitions, context = {}) {
@@ -935,6 +997,7 @@ async function upsertCategoryTree(definitions, context = {}) {
     inheritedColor = null,
     depth = 0,
     categoryByCode = new Map(),
+    inheritedAttributes = new Map(),
     counters = { categories: 0, leaves: 0, attributes: 0, options: 0 },
   } = context;
 
@@ -967,9 +1030,15 @@ async function upsertCategoryTree(definitions, context = {}) {
     counters.categories += 1;
     if (isLeaf) counters.leaves += 1;
 
+    const availableAttributes = new Map(inheritedAttributes);
     for (let attributeIndex = 0; attributeIndex < definition.attributes.length; attributeIndex += 1) {
       const attribute = definition.attributes[attributeIndex];
-      await upsertAttribute(category.id, attribute, (depth + 1) * 1000 + (attributeIndex + 1) * 10);
+      await upsertAttribute(
+        category.id,
+        attribute,
+        (depth + 1) * 1000 + (attributeIndex + 1) * 10,
+        availableAttributes,
+      );
       counters.attributes += 1;
       counters.options += attribute.options?.length || 0;
     }
@@ -979,6 +1048,7 @@ async function upsertCategoryTree(definitions, context = {}) {
       inheritedColor: color,
       depth: depth + 1,
       categoryByCode,
+      inheritedAttributes: availableAttributes,
       counters,
     });
   }

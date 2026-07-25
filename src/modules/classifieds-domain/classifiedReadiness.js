@@ -110,6 +110,45 @@ function validateAttribute(attribute, values) {
   return issues;
 }
 
+function validateAttributeDependencies(attributes, values) {
+  const attributesById = new Map((attributes || []).map((attribute) => [Number(attribute.id), attribute]));
+  const issues = [];
+  for (const attribute of attributes || []) {
+    if (attribute.dependsOnAttributeId == null) continue;
+    const rows = valueRowsForAttribute(values, attribute);
+    if (!rows.length) continue;
+    const parent = attributesById.get(Number(attribute.dependsOnAttributeId));
+    const parentRows = parent ? valueRowsForAttribute(values, parent) : [];
+    const parentOptionIds = new Set(
+      parentRows.map((row) => Number(row.optionId)).filter(Boolean),
+    );
+    const optionsById = new Map(
+      (attribute.options || []).map((option) => [Number(option.id), option]),
+    );
+    const field = `attributes.${attribute.code}`;
+
+    if (!parent || !parentOptionIds.size) {
+      issues.push(issue(
+        'CLASSIFIED_ATTRIBUTE_DEPENDENCY_REQUIRED',
+        field,
+        `Attribute "${attribute.title}" requires its parent attribute`,
+      ));
+      continue;
+    }
+    if (rows.some((row) => {
+      const option = optionsById.get(Number(row.optionId));
+      return !option || !parentOptionIds.has(Number(option.parentOptionId));
+    })) {
+      issues.push(issue(
+        'CLASSIFIED_ATTRIBUTE_DEPENDENCY_MISMATCH',
+        field,
+        `Attribute "${attribute.title}" does not match its parent selection`,
+      ));
+    }
+  }
+  return issues;
+}
+
 function evaluateClassifiedReadiness(input) {
   const settings = { ...DEFAULT_CLASSIFIED_SETTINGS, ...(input.settings || {}) };
   const ad = input.ad || {};
@@ -235,6 +274,10 @@ function evaluateClassifiedReadiness(input) {
   for (const attribute of attributes.filter((item) => item.isActive !== false)) {
     issues.push(...validateAttribute(attribute, values));
   }
+  issues.push(...validateAttributeDependencies(
+    attributes.filter((item) => item.isActive !== false),
+    values,
+  ));
 
   return {
     ready: issues.length === 0,
@@ -258,4 +301,5 @@ module.exports = {
   evaluateClassifiedReadiness,
   populatedValueCount,
   validateAttribute,
+  validateAttributeDependencies,
 };

@@ -1,12 +1,15 @@
 const express = require('express');
 const multer = require('multer');
 const appAuth = require('../../middlewares/appAuth');
+const optionalAppAuth = require('../../middlewares/optionalAppAuth');
 const validate = require('../../middlewares/validate');
 const controller = require('./appClassified.controller');
 const {
   actionBodySchema,
   categoryParamSchema,
   createAdSchema,
+  createReportSchema,
+  favoriteAdListSchema,
   idParamSchema,
   imageDeleteQuerySchema,
   imageParamSchema,
@@ -23,6 +26,7 @@ const {
   createAdLimiter,
   imageLimiter,
   mutationLimiter,
+  reportLimiter,
 } = require('./appClassified.rateLimits');
 
 const router = express.Router();
@@ -44,11 +48,36 @@ router.get(
 router.get('/ads', validate(publicAdListSchema, 'query'), controller.publicAds);
 router.get(
   '/ads/:id',
+  optionalAppAuth,
   validate(idParamSchema, 'params'),
   controller.publicAdDetail,
 );
 
 router.use(appAuth);
+router.get(
+  '/favorites',
+  validate(favoriteAdListSchema, 'query'),
+  controller.favorites,
+);
+router.post(
+  '/ads/:id/favorite',
+  mutationLimiter,
+  validate(idParamSchema, 'params'),
+  controller.addFavorite,
+);
+router.delete(
+  '/ads/:id/favorite',
+  mutationLimiter,
+  validate(idParamSchema, 'params'),
+  controller.removeFavorite,
+);
+router.post(
+  '/ads/:id/reports',
+  reportLimiter,
+  validate(idParamSchema, 'params'),
+  validate(createReportSchema),
+  controller.createReport,
+);
 router.get('/posting-config', controller.postingConfig);
 router.get('/categories/:categoryId/attributes', validate(categoryParamSchema, 'params'), controller.categoryAttributes);
 router.get('/my-ads', validate(listMyAdsSchema, 'query'), controller.list);

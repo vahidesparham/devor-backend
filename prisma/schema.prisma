@@ -1214,24 +1214,24 @@ model AppWallet {
 }
 
 model AppWalletTransaction {
-  id            BigInt                   @id @default(autoincrement())
-  walletId      Int
-  appUserId     Int
-  adminId       Int?
-  type          AppWalletTransactionType
-  amount        Decimal                  @db.Decimal(14, 2)
-  balanceBefore Decimal                  @db.Decimal(14, 2)
-  balanceAfter  Decimal                  @db.Decimal(14, 2)
-  currency      String                   @default("TJS") @db.VarChar(10)
-  reason        String?                  @db.VarChar(160)
-  note          String?                  @db.VarChar(500)
-  referenceType String?                  @db.VarChar(80)
-  referenceId   String?                  @db.VarChar(120)
-  createdAt     DateTime                 @default(now())
-  wallet        AppWallet                @relation(fields: [walletId], references: [id], onDelete: Cascade)
-  appUser       AppUser                  @relation(fields: [appUserId], references: [id], onDelete: Cascade)
-  admin         AdminUser?               @relation(fields: [adminId], references: [id], onDelete: SetNull)
-  classifiedPostingFeeAd ClassifiedAd?   @relation("ClassifiedPostingFeeTransaction")
+  id                     BigInt                   @id @default(autoincrement())
+  walletId               Int
+  appUserId              Int
+  adminId                Int?
+  type                   AppWalletTransactionType
+  amount                 Decimal                  @db.Decimal(14, 2)
+  balanceBefore          Decimal                  @db.Decimal(14, 2)
+  balanceAfter           Decimal                  @db.Decimal(14, 2)
+  currency               String                   @default("TJS") @db.VarChar(10)
+  reason                 String?                  @db.VarChar(160)
+  note                   String?                  @db.VarChar(500)
+  referenceType          String?                  @db.VarChar(80)
+  referenceId            String?                  @db.VarChar(120)
+  createdAt              DateTime                 @default(now())
+  wallet                 AppWallet                @relation(fields: [walletId], references: [id], onDelete: Cascade)
+  appUser                AppUser                  @relation(fields: [appUserId], references: [id], onDelete: Cascade)
+  admin                  AdminUser?               @relation(fields: [adminId], references: [id], onDelete: SetNull)
+  classifiedPostingFeeAd ClassifiedAd?            @relation("ClassifiedPostingFeeTransaction")
 
   @@index([walletId, createdAt])
   @@index([appUserId, createdAt])
@@ -1328,104 +1328,112 @@ model ClassifiedCategory {
 }
 
 model ClassifiedAttribute {
-  id            Int                          @id @default(autoincrement())
-  categoryId    Int
-  code          String                       @db.VarChar(120)
-  title         String                       @db.VarChar(160)
-  type          ClassifiedAttributeType
-  unit          String?                      @db.VarChar(60)
-  placeholder   String?                      @db.VarChar(255)
-  isRequired    Boolean                      @default(false)
-  showInFilters Boolean                      @default(false)
-  displayOrder  Int                          @default(0)
-  isActive      Boolean                      @default(true)
-  minValue      Decimal?                     @db.Decimal(14, 2)
-  maxValue      Decimal?                     @db.Decimal(14, 2)
-  minLength     Int?
-  maxLength     Int?
-  createdAt     DateTime                     @default(now())
-  updatedAt     DateTime                     @updatedAt
-  category      ClassifiedCategory           @relation(fields: [categoryId], references: [id], onDelete: Cascade)
-  options       ClassifiedAttributeOption[]
-  values        ClassifiedAdAttributeValue[]
+  id                   Int                          @id @default(autoincrement())
+  categoryId           Int
+  dependsOnAttributeId Int?
+  code                 String                       @db.VarChar(120)
+  title                String                       @db.VarChar(160)
+  type                 ClassifiedAttributeType
+  unit                 String?                      @db.VarChar(60)
+  placeholder          String?                      @db.VarChar(255)
+  isRequired           Boolean                      @default(false)
+  showInFilters        Boolean                      @default(false)
+  displayOrder         Int                          @default(0)
+  isActive             Boolean                      @default(true)
+  minValue             Decimal?                     @db.Decimal(14, 2)
+  maxValue             Decimal?                     @db.Decimal(14, 2)
+  minLength            Int?
+  maxLength            Int?
+  createdAt            DateTime                     @default(now())
+  updatedAt            DateTime                     @updatedAt
+  category             ClassifiedCategory           @relation(fields: [categoryId], references: [id], onDelete: Cascade)
+  dependsOnAttribute   ClassifiedAttribute?         @relation("ClassifiedAttributeDependency", fields: [dependsOnAttributeId], references: [id], onDelete: Restrict)
+  dependentAttributes  ClassifiedAttribute[]        @relation("ClassifiedAttributeDependency")
+  options              ClassifiedAttributeOption[]
+  values               ClassifiedAdAttributeValue[]
 
   @@unique([categoryId, code])
+  @@index([dependsOnAttributeId])
   @@index([categoryId, isActive, displayOrder])
   @@index([categoryId, showInFilters, isActive])
 }
 
 model ClassifiedAttributeOption {
-  id           Int                          @id @default(autoincrement())
-  attributeId  Int
-  code         String                       @db.VarChar(120)
-  title        String                       @db.VarChar(160)
-  image        String?                      @db.VarChar(500)
-  color        String?                      @db.VarChar(30)
-  displayOrder Int                          @default(0)
-  isActive     Boolean                      @default(true)
-  createdAt    DateTime                     @default(now())
-  updatedAt    DateTime                     @updatedAt
-  attribute    ClassifiedAttribute          @relation(fields: [attributeId], references: [id], onDelete: Cascade)
-  values       ClassifiedAdAttributeValue[]
+  id             Int                          @id @default(autoincrement())
+  attributeId    Int
+  parentOptionId Int?
+  code           String                       @db.VarChar(120)
+  title          String                       @db.VarChar(160)
+  image          String?                      @db.VarChar(500)
+  color          String?                      @db.VarChar(30)
+  displayOrder   Int                          @default(0)
+  isActive       Boolean                      @default(true)
+  createdAt      DateTime                     @default(now())
+  updatedAt      DateTime                     @updatedAt
+  attribute      ClassifiedAttribute          @relation(fields: [attributeId], references: [id], onDelete: Cascade)
+  parentOption   ClassifiedAttributeOption?   @relation("ClassifiedAttributeOptionDependency", fields: [parentOptionId], references: [id], onDelete: Restrict)
+  childOptions   ClassifiedAttributeOption[]  @relation("ClassifiedAttributeOptionDependency")
+  values         ClassifiedAdAttributeValue[]
 
   @@unique([attributeId, code])
+  @@index([parentOptionId])
   @@index([attributeId, isActive, displayOrder])
 }
 
 model ClassifiedAd {
-  id                Int                          @id @default(autoincrement())
-  publicCode        String                       @unique @db.VarChar(24)
-  categoryId        Int
-  ownerType         ClassifiedOwnerType
-  appUserId         Int?
-  businessId        Int?
-  countryId         Int
-  cityId            Int
-  areaId            Int
-  title             String                       @db.VarChar(120)
-  description       String                       @db.Text
-  priceType         ClassifiedPriceType
-  price             Decimal?                     @db.Decimal(14, 2)
-  currency          String                       @default("TJS") @db.VarChar(10)
-  contactName       String?                      @db.VarChar(120)
-  contactPhone      String                       @db.VarChar(80)
-  allowPhone        Boolean                      @default(true)
-  allowChat         Boolean                      @default(false)
-  latitude          Decimal?                     @db.Decimal(10, 7)
-  longitude         Decimal?                     @db.Decimal(10, 7)
-  locationPrecision ClassifiedLocationPrecision  @default(APPROXIMATE)
-  status            ClassifiedAdStatus           @default(DRAFT)
-  submittedAt       DateTime?
-  reviewedAt        DateTime?
-  publishedAt       DateTime?
-  expiresAt         DateTime?
-  soldAt            DateTime?
-  archivedAt        DateTime?
-  deletedAt         DateTime?
-  moderationNote    String?                      @db.Text
-  postingFee        Decimal                      @default(0) @db.Decimal(14, 2)
-  postingFeeCurrency String                      @default("TJS") @db.VarChar(10)
-  postingFeePaidAt  DateTime?
-  postingFeeTransactionId BigInt?                @unique
-  version           Int                          @default(1)
-  viewCount         Int                          @default(0)
-  favoriteCount     Int                          @default(0)
-  reportCount       Int                          @default(0)
-  createdAt         DateTime                     @default(now())
-  updatedAt         DateTime                     @updatedAt
-  category          ClassifiedCategory           @relation(fields: [categoryId], references: [id], onDelete: Restrict)
-  appUser           AppUser?                     @relation(fields: [appUserId], references: [id], onDelete: Restrict)
-  business          Business?                    @relation(fields: [businessId], references: [id], onDelete: Restrict)
-  country           Country                      @relation(fields: [countryId], references: [id], onDelete: Restrict)
-  city              City                         @relation(fields: [cityId], references: [id], onDelete: Restrict)
-  area              Area                         @relation(fields: [areaId], references: [id], onDelete: Restrict)
-  postingFeeTransaction AppWalletTransaction?    @relation("ClassifiedPostingFeeTransaction", fields: [postingFeeTransactionId], references: [id], onDelete: SetNull)
-  images            ClassifiedAdImage[]
-  attributeValues   ClassifiedAdAttributeValue[]
-  favorites         ClassifiedFavorite[]
-  reports           ClassifiedReport[]
-  statusHistory     ClassifiedAdStatusHistory[]
-  dailyViews        ClassifiedAdViewDaily[]
+  id                      Int                          @id @default(autoincrement())
+  publicCode              String                       @unique @db.VarChar(24)
+  categoryId              Int
+  ownerType               ClassifiedOwnerType
+  appUserId               Int?
+  businessId              Int?
+  countryId               Int
+  cityId                  Int
+  areaId                  Int
+  title                   String                       @db.VarChar(120)
+  description             String                       @db.Text
+  priceType               ClassifiedPriceType
+  price                   Decimal?                     @db.Decimal(14, 2)
+  currency                String                       @default("TJS") @db.VarChar(10)
+  contactName             String?                      @db.VarChar(120)
+  contactPhone            String                       @db.VarChar(80)
+  allowPhone              Boolean                      @default(true)
+  allowChat               Boolean                      @default(false)
+  latitude                Decimal?                     @db.Decimal(10, 7)
+  longitude               Decimal?                     @db.Decimal(10, 7)
+  locationPrecision       ClassifiedLocationPrecision  @default(APPROXIMATE)
+  status                  ClassifiedAdStatus           @default(DRAFT)
+  submittedAt             DateTime?
+  reviewedAt              DateTime?
+  publishedAt             DateTime?
+  expiresAt               DateTime?
+  soldAt                  DateTime?
+  archivedAt              DateTime?
+  deletedAt               DateTime?
+  moderationNote          String?                      @db.Text
+  postingFee              Decimal                      @default(0) @db.Decimal(14, 2)
+  postingFeeCurrency      String                       @default("TJS") @db.VarChar(10)
+  postingFeePaidAt        DateTime?
+  postingFeeTransactionId BigInt?                      @unique
+  version                 Int                          @default(1)
+  viewCount               Int                          @default(0)
+  favoriteCount           Int                          @default(0)
+  reportCount             Int                          @default(0)
+  createdAt               DateTime                     @default(now())
+  updatedAt               DateTime                     @updatedAt
+  category                ClassifiedCategory           @relation(fields: [categoryId], references: [id], onDelete: Restrict)
+  appUser                 AppUser?                     @relation(fields: [appUserId], references: [id], onDelete: Restrict)
+  business                Business?                    @relation(fields: [businessId], references: [id], onDelete: Restrict)
+  country                 Country                      @relation(fields: [countryId], references: [id], onDelete: Restrict)
+  city                    City                         @relation(fields: [cityId], references: [id], onDelete: Restrict)
+  area                    Area                         @relation(fields: [areaId], references: [id], onDelete: Restrict)
+  postingFeeTransaction   AppWalletTransaction?        @relation("ClassifiedPostingFeeTransaction", fields: [postingFeeTransactionId], references: [id], onDelete: SetNull)
+  images                  ClassifiedAdImage[]
+  attributeValues         ClassifiedAdAttributeValue[]
+  favorites               ClassifiedFavorite[]
+  reports                 ClassifiedReport[]
+  statusHistory           ClassifiedAdStatusHistory[]
+  dailyViews              ClassifiedAdViewDaily[]
 
   @@index([status, cityId, publishedAt])
   @@index([status, categoryId, publishedAt])

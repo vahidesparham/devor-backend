@@ -652,6 +652,32 @@ test('public classified detail exposes presentation data without private moderat
     const privateContact = await appClassifiedService.getPublicAd(ad.id);
     assert.equal(privateContact.contactPhone, null);
 
+    await appClassifiedService.addFavorite({ id: user.id }, ad.id);
+    await appClassifiedService.addFavorite({ id: user.id }, ad.id);
+    const favoriteDetail = await appClassifiedService.getPublicAd(ad.id, user.id);
+    assert.equal(favoriteDetail.isFavorite, true);
+    assert.equal(favoriteDetail.favoriteCount, 1);
+
+    const favorites = await appClassifiedService.listFavoriteAds(
+      { id: user.id },
+      { page: 1, pageSize: 20 },
+    );
+    assert.equal(favorites.meta.total, 1);
+    assert.equal(favorites.items[0].id, ad.id);
+    assert.equal(favorites.items[0].isFavorite, true);
+
+    const removed = await appClassifiedService.removeFavorite(
+      { id: user.id },
+      ad.id,
+    );
+    assert.equal(removed.isFavorite, false);
+    assert.equal(removed.favoriteCount, 0);
+    const unfavoritedDetail = await appClassifiedService.getPublicAd(
+      ad.id,
+      user.id,
+    );
+    assert.equal(unfavoritedDetail.isFavorite, false);
+
     await prisma.classifiedAd.update({
       where: { id: ad.id },
       data: { status: 'PAUSED' },
