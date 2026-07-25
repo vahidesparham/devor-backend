@@ -13,6 +13,7 @@ const {
   imageUploadBodySchema,
   listMyAdsSchema,
   publicAdListSchema,
+  publicCategoryListSchema,
   reorderImagesSchema,
   saveAttributeValuesSchema,
   updateAdSchema,
@@ -30,8 +31,22 @@ const imageUpload = multer({
   limits: { fileSize: 12 * 1024 * 1024 },
 });
 
-router.get('/categories', controller.publicCategories);
+router.get(
+  '/categories',
+  validate(publicCategoryListSchema, 'query'),
+  controller.publicCategories,
+);
+router.get(
+  '/categories/:categoryId/filters',
+  validate(categoryParamSchema, 'params'),
+  controller.publicCategoryFilters,
+);
 router.get('/ads', validate(publicAdListSchema, 'query'), controller.publicAds);
+router.get(
+  '/ads/:id',
+  validate(idParamSchema, 'params'),
+  controller.publicAdDetail,
+);
 
 router.use(appAuth);
 router.get('/posting-config', controller.postingConfig);

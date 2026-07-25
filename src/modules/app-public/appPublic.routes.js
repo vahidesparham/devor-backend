@@ -14,6 +14,7 @@ const {
   publicExploreQuerySchema,
   publicBusinessListQuerySchema,
   publicBusinessFiltersQuerySchema,
+  publicAreaListQuerySchema,
   publicBlogListQuerySchema,
   publicBlogPostParamSchema,
   publicBusinessParamSchema,
@@ -40,6 +41,7 @@ router.get('/onboarding-pages', validate(langQuerySchema, 'query'), controller.o
 router.get('/faqs', validate(langQuerySchema, 'query'), controller.faqs);
 router.get('/countries', validate(langQuerySchema, 'query'), controller.countries);
 router.get('/cities', validate(langQuerySchema, 'query'), controller.cities);
+router.get('/areas', validate(publicAreaListQuerySchema, 'query'), controller.areas);
 router.get('/contact-page', validate(langQuerySchema, 'query'), controller.contactPage);
 router.get('/blog-posts', validate(publicBlogListQuerySchema, 'query'), controller.blogPosts);
 router.get('/favorites', appAuth, validate(publicFavoriteBusinessListQuerySchema, 'query'), controller.favoriteBusinesses);

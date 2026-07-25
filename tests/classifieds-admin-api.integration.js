@@ -49,13 +49,25 @@ test('classified admin API moderates ads and reports with versions, history, and
             code: `moderation_city_${suffix}`,
             title: `Moderation city ${suffix}`,
             isActive: true,
+            areas: {
+              create: {
+                code: `moderation_area_${suffix}`,
+                title: `Moderation area ${suffix}`,
+                isActive: true,
+              },
+            },
           },
         },
       },
-      include: { cities: true },
+      include: {
+        cities: {
+          include: { areas: true },
+        },
+      },
     });
     created.countryId = country.id;
     const city = country.cities[0];
+    const area = city.areas[0];
 
     const category = await prisma.classifiedCategory.create({
       data: {
@@ -78,6 +90,7 @@ test('classified admin API moderates ads and reports with versions, history, and
           appUserId: owner.id,
           countryId: country.id,
           cityId: city.id,
+          areaId: area.id,
           title,
           description: 'A complete plain text classified description for moderation.',
           priceType: 'CONTACT',

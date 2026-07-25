@@ -180,6 +180,9 @@ function evaluateClassifiedReadiness(input) {
   if (!ad.countryId || !ad.cityId) {
     issues.push(issue('CLASSIFIED_LOCATION_REQUIRED', 'cityId', 'Country and city are required'));
   }
+  if (!ad.areaId) {
+    issues.push(issue('CLASSIFIED_AREA_REQUIRED', 'areaId', 'Neighborhood is required'));
+  }
   if (ad.countryId && (!input.country || input.country.isActive !== true)) {
     issues.push(issue('CLASSIFIED_COUNTRY_INACTIVE', 'countryId', 'Selected country is not active'));
   }

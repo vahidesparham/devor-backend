@@ -85,6 +85,10 @@ const publicBusinessFiltersQuerySchema = langQuerySchema.extend({
   serviceTypeId: z.coerce.number().int().positive().optional(),
 });
 
+const publicAreaListQuerySchema = langQuerySchema.extend({
+  cityId: z.coerce.number().int().positive(),
+});
+
 const publicBusinessReviewListQuerySchema = langQuerySchema.extend({
   page: z.coerce.number().int().min(1).optional().default(1),
   pageSize: z.coerce.number().int().min(1).max(50).optional().default(10),
@@ -119,6 +123,7 @@ module.exports = {
   publicExploreQuerySchema,
   publicBusinessListQuerySchema,
   publicBusinessFiltersQuerySchema,
+  publicAreaListQuerySchema,
   contentPageParamSchema,
   publicBlogListQuerySchema,
   publicBlogPostParamSchema,

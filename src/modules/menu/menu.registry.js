@@ -232,7 +232,7 @@
     },
     {
         key: "countriesRegions",
-        title: "کشورها و مناطق",
+        title: "کشورها و محله‌ها",
         icon: "hgi-location-03",
         order: 29,
         items: [
@@ -254,7 +254,7 @@
             },
             {
                 key: "areas",
-                title: "مناطق",
+                title: "محله‌ها",
                 route: "/locations/areas",
                 icon: "hgi-location-03",
                 order: 30,

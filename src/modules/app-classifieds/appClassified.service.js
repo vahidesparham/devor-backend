@@ -57,6 +57,11 @@ function mapCategory(category, currency = null) {
     color: category.color,
     isActive: category.isActive,
     allowAds: category.allowAds,
+    ...(
+      category._count
+        ? { hasChildren: Number(category._count.children || 0) > 0 }
+        : {}
+    ),
     postingFee: toNumber(category.postingFee) || 0,
     ...(currency ? { postingFeeCurrency: currency } : {}),
   };
@@ -177,10 +182,52 @@ function mapPublicSummary(ad) {
   };
 }
 
-async function listPublicCategories() {
+function mapPublicDetail(ad) {
+  const sellerName = [
+    ad.appUser?.firstName,
+    ad.appUser?.lastName,
+  ].filter(Boolean).join(' ').trim();
+
+  return {
+    ...mapPublicSummary(ad),
+    description: ad.description,
+    country: ad.country
+      ? { id: ad.country.id, code: ad.country.code, title: ad.country.title }
+      : null,
+    images: (ad.images || []).map(mapImage),
+    attributeValues: (ad.attributeValues || []).map(mapAttributeValue),
+    contactName: ad.contactName || sellerName || null,
+    contactPhone: ad.allowPhone ? ad.contactPhone : null,
+    allowPhone: ad.allowPhone,
+    allowChat: ad.allowChat,
+    seller: ad.appUser
+      ? {
+        type: 'APP_USER',
+        id: ad.appUser.id,
+        name: sellerName || ad.contactName || null,
+        avatar: ad.appUser.avatar,
+      }
+      : {
+        type: ad.ownerType,
+        id: ad.businessId,
+        name: ad.contactName || null,
+        avatar: ad.business?.logoImage || null,
+      },
+  };
+}
+
+async function listPublicCategories(query = {}) {
+  const parentId = query.parentId == null ? null : Number(query.parentId);
   const rows = await prisma.classifiedCategory.findMany({
-    where: { parentId: null, isActive: true },
+    where: { parentId, isActive: true },
     orderBy: [{ displayOrder: 'asc' }, { id: 'asc' }],
+    include: {
+      _count: {
+        select: {
+          children: { where: { isActive: true } },
+        },
+      },
+    },
   });
   return rows.map((category) => mapCategory(category));
 }
@@ -208,6 +255,121 @@ async function getPublicCategoryIds(categoryId) {
   return [...categoryIds];
 }
 
+async function getPublicFilterAttributes(categoryId) {
+  const rows = await getCategoryRows();
+  const category = rows.find((item) => item.id === Number(categoryId));
+  const path = category ? getCategoryPath(rows, category.id) : [];
+  if (!category || !path.length || path.some((item) => !item.isActive)) {
+    throw new AppError(
+      404,
+      'CLASSIFIED_CATEGORY_NOT_FOUND',
+      'Classified category not found',
+    );
+  }
+  const attributes = await getResolvedAttributes(category.id, rows);
+  return {
+    category,
+    attributes: attributes.filter((attribute) => attribute.showInFilters),
+  };
+}
+
+async function getPublicCategoryFilters(categoryId) {
+  const { category, attributes } = await getPublicFilterAttributes(categoryId);
+  return {
+    category: mapCategory(category),
+    attributes: attributes.map(mapAttribute),
+  };
+}
+
+function invalidPublicAttributeFilter(attributeId, message) {
+  throw new AppError(
+    400,
+    'CLASSIFIED_ATTRIBUTE_FILTER_INVALID',
+    message,
+    {
+      errors: [{
+        path: `attributeFilters.${attributeId}`,
+        message,
+      }],
+    },
+  );
+}
+
+async function buildPublicAttributeWhere(categoryId, filters) {
+  if (!filters?.length) return [];
+  const { attributes } = await getPublicFilterAttributes(categoryId);
+  const byId = new Map(attributes.map((attribute) => [attribute.id, attribute]));
+
+  return filters.map((filter) => {
+    const attribute = byId.get(filter.attributeId);
+    if (!attribute) {
+      invalidPublicAttributeFilter(
+        filter.attributeId,
+        'Classified attribute is not available as a filter for this category',
+      );
+    }
+
+    if (filter.optionIds) {
+      if (!['SELECT', 'MULTI_SELECT'].includes(attribute.type)) {
+        invalidPublicAttributeFilter(
+          filter.attributeId,
+          'Option values are not valid for this classified attribute',
+        );
+      }
+      const allowedOptionIds = new Set(attribute.options.map((option) => option.id));
+      if (filter.optionIds.some((optionId) => !allowedOptionIds.has(optionId))) {
+        invalidPublicAttributeFilter(
+          filter.attributeId,
+          'One or more classified attribute options are invalid',
+        );
+      }
+      return {
+        attributeValues: {
+          some: {
+            attributeId: attribute.id,
+            optionId: { in: filter.optionIds },
+          },
+        },
+      };
+    }
+
+    if (filter.minNumber !== undefined || filter.maxNumber !== undefined) {
+      if (attribute.type !== 'NUMBER') {
+        invalidPublicAttributeFilter(
+          filter.attributeId,
+          'Numeric values are not valid for this classified attribute',
+        );
+      }
+      return {
+        attributeValues: {
+          some: {
+            attributeId: attribute.id,
+            numberValue: {
+              ...(filter.minNumber !== undefined ? { gte: filter.minNumber } : {}),
+              ...(filter.maxNumber !== undefined ? { lte: filter.maxNumber } : {}),
+            },
+          },
+        },
+      };
+    }
+
+    if (attribute.type !== 'BOOLEAN') {
+      invalidPublicAttributeFilter(
+        filter.attributeId,
+        'Boolean values are not valid for this classified attribute',
+      );
+    }
+    return {
+      attributeValues: {
+        some: {
+          attributeId: attribute.id,
+          booleanValue: filter.booleanValue,
+        },
+      },
+    };
+  });
+}
+
 async function listPublicAds(query) {
   const now = new Date();
   const where = {
@@ -217,8 +379,21 @@ async function listPublicAds(query) {
     OR: [{ expiresAt: null }, { expiresAt: { gt: now } }],
   };
   if (query.cityId) where.cityId = query.cityId;
+  if (query.areaIds?.length) where.areaId = { in: query.areaIds };
+  if (query.minPrice !== undefined || query.maxPrice !== undefined) {
+    where.price = {
+      ...(query.minPrice !== undefined ? { gte: query.minPrice } : {}),
+      ...(query.maxPrice !== undefined ? { lte: query.maxPrice } : {}),
+    };
+  }
   if (query.categoryId) {
     where.categoryId = { in: await getPublicCategoryIds(query.categoryId) };
+  }
+  if (query.attributeFilters?.length) {
+    where.AND = await buildPublicAttributeWhere(
+      query.categoryId,
+      query.attributeFilters,
+    );
   }
 
   const skip = (query.page - 1) * query.pageSize;
@@ -251,6 +426,78 @@ async function listPublicAds(query) {
       hasNext: skip + items.length < total,
     },
   };
+}
+
+async function getPublicAd(id) {
+  const now = new Date();
+  const ad = await prisma.classifiedAd.findFirst({
+    where: {
+      id: Number(id),
+      status: STATUSES.PUBLISHED,
+      deletedAt: null,
+      publishedAt: { not: null },
+      OR: [{ expiresAt: null }, { expiresAt: { gt: now } }],
+    },
+    include: {
+      category: true,
+      appUser: {
+        select: {
+          id: true,
+          firstName: true,
+          lastName: true,
+          avatar: true,
+        },
+      },
+      business: {
+        select: {
+          id: true,
+          logoImage: true,
+        },
+      },
+      country: { select: { id: true, code: true, title: true } },
+      city: { select: { id: true, title: true } },
+      area: { select: { id: true, title: true } },
+      images: {
+        orderBy: [
+          { isCover: 'desc' },
+          { displayOrder: 'asc' },
+          { id: 'asc' },
+        ],
+      },
+      attributeValues: {
+        orderBy: [{ attributeId: 'asc' }, { id: 'asc' }],
+        include: {
+          attribute: {
+            select: {
+              id: true,
+              code: true,
+              title: true,
+              type: true,
+              unit: true,
+            },
+          },
+          option: {
+            select: {
+              id: true,
+              code: true,
+              title: true,
+              image: true,
+              color: true,
+            },
+          },
+        },
+      },
+    },
+  });
+
+  if (!ad) {
+    throw new AppError(
+      404,
+      'CLASSIFIED_NOT_FOUND',
+      'Classified ad not found',
+    );
+  }
+  return mapPublicDetail(ad);
 }
 
 function mapDetail(ad, resolvedAttributes = null) {
@@ -1312,6 +1559,8 @@ module.exports = {
   createDraft,
   deleteAdImage,
   getCategoryAttributes,
+  getPublicCategoryFilters,
+  getPublicAd,
   getMyAd,
   getMyAdReadiness,
   getPostingConfig,

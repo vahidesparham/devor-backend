@@ -35,14 +35,33 @@ async function createLocation(suffix) {
           code: `hardening_city_${suffix}`,
           title: `Hardening city ${suffix}`,
           isActive: true,
+          areas: {
+            create: {
+              code: `hardening_area_${suffix}`,
+              title: `Hardening area ${suffix}`,
+              isActive: true,
+            },
+          },
         },
       },
     },
-    include: { cities: true },
+    include: {
+      cities: {
+        include: { areas: true },
+      },
+    },
   });
 }
 
-function baseAdData({ publicCode, categoryId, appUserId, countryId, cityId, phone }) {
+function baseAdData({
+  publicCode,
+  categoryId,
+  appUserId,
+  countryId,
+  cityId,
+  areaId,
+  phone,
+}) {
   return {
     publicCode,
     categoryId,
@@ -51,7 +70,7 @@ function baseAdData({ publicCode, categoryId, appUserId, countryId, cityId, phon
     businessId: null,
     countryId,
     cityId,
-    areaId: null,
+    areaId,
     title: 'Hardening classified ad',
     description: 'A complete classified description used by hardening tests.',
     priceType: 'CONTACT',
@@ -77,6 +96,7 @@ test('classified expiry sweep transitions every due operational state with histo
     });
     country = await createLocation(suffix);
     const city = country.cities[0];
+    const area = city.areas[0];
     category = await prisma.classifiedCategory.create({
       data: {
         code: `expiry_${suffix}`,
@@ -97,6 +117,7 @@ test('classified expiry sweep transitions every due operational state with histo
             appUserId: user.id,
             countryId: country.id,
             cityId: city.id,
+            areaId: area.id,
             phone: user.phone,
           }),
           status,
@@ -114,6 +135,7 @@ test('classified expiry sweep transitions every due operational state with histo
           appUserId: user.id,
           countryId: country.id,
           cityId: city.id,
+          areaId: area.id,
           phone: user.phone,
         }),
         status: 'PUBLISHED',
@@ -166,6 +188,7 @@ test('taxonomy changes cannot invalidate operational classified ads', async () =
     });
     country = await createLocation(suffix);
     const city = country.cities[0];
+    const area = city.areas[0];
     activeRoot = await categoryService.createClassifiedCategory({
       parentId: null,
       code: `active_root_${suffix}`,
@@ -239,6 +262,7 @@ test('taxonomy changes cannot invalidate operational classified ads', async () =
           appUserId: user.id,
           countryId: country.id,
           cityId: city.id,
+          areaId: area.id,
           phone: user.phone,
         }),
         status: 'PUBLISHED',
@@ -298,6 +322,7 @@ test('classified draft and active quotas remain exact under concurrent requests'
     ]);
     country = await createLocation(suffix);
     const city = country.cities[0];
+    const area = city.areas[0];
     category = await prisma.classifiedCategory.create({
       data: {
         code: `quota_${suffix}`,
@@ -318,6 +343,7 @@ test('classified draft and active quotas remain exact under concurrent requests'
           appUserId: draftUser.id,
           countryId: country.id,
           cityId: city.id,
+          areaId: area.id,
           phone: draftUser.phone,
         }),
         title: '',
@@ -329,7 +355,7 @@ test('classified draft and active quotas remain exact under concurrent requests'
       categoryId: category.id,
       countryId: country.id,
       cityId: city.id,
-      areaId: null,
+      areaId: area.id,
       title: '',
       description: '',
       priceType: 'CONTACT',
@@ -367,6 +393,7 @@ test('classified draft and active quotas remain exact under concurrent requests'
           appUserId: activeUser.id,
           countryId: country.id,
           cityId: city.id,
+          areaId: area.id,
           phone: activeUser.phone,
         }),
         status: 'PUBLISHED',
@@ -384,6 +411,7 @@ test('classified draft and active quotas remain exact under concurrent requests'
             appUserId: activeUser.id,
             countryId: country.id,
             cityId: city.id,
+            areaId: area.id,
             phone: activeUser.phone,
           }),
           status: 'DRAFT',
@@ -421,5 +449,232 @@ test('classified draft and active quotas remain exact under concurrent requests'
     if (category?.id) await prisma.classifiedCategory.delete({ where: { id: category.id } }).catch(() => {});
     if (country?.id) await prisma.country.delete({ where: { id: country.id } }).catch(() => {});
     if (userIds.length) await prisma.appUser.deleteMany({ where: { id: { in: userIds } } });
+  }
+});
+
+test('public classified filters expose configured attributes and match stored values', async () => {
+  const suffix = `${Date.now()}${Math.floor(Math.random() * 10000)}`;
+  let user;
+  let country;
+  let category;
+  const adIds = [];
+
+  try {
+    user = await prisma.appUser.create({
+      data: { phone: `+99297${suffix.slice(-7)}`, isActive: true },
+    });
+    country = await createLocation(suffix);
+    const city = country.cities[0];
+    const area = city.areas[0];
+    category = await prisma.classifiedCategory.create({
+      data: {
+        code: `public_filter_${suffix}`,
+        slug: `public-filter-${suffix}`,
+        title: 'Public filter category',
+        isActive: true,
+        allowAds: true,
+        postingFee: 0,
+      },
+    });
+    const attribute = await prisma.classifiedAttribute.create({
+      data: {
+        categoryId: category.id,
+        code: `condition_${suffix}`,
+        title: 'Condition',
+        type: 'SELECT',
+        showInFilters: true,
+        isActive: true,
+        options: {
+          create: [
+            { code: `new_${suffix}`, title: 'New', isActive: true },
+            { code: `used_${suffix}`, title: 'Used', isActive: true },
+          ],
+        },
+      },
+      include: { options: { orderBy: { id: 'asc' } } },
+    });
+
+    for (const [index, option] of attribute.options.entries()) {
+      const ad = await prisma.classifiedAd.create({
+        data: {
+          ...baseAdData({
+            publicCode: `PF${index}${suffix.slice(-10)}`,
+            categoryId: category.id,
+            appUserId: user.id,
+            countryId: country.id,
+            cityId: city.id,
+            areaId: area.id,
+            phone: user.phone,
+          }),
+          status: 'PUBLISHED',
+          publishedAt: new Date(),
+          expiresAt: new Date(Date.now() + 86400000),
+          attributeValues: {
+            create: {
+              attributeId: attribute.id,
+              optionId: option.id,
+            },
+          },
+        },
+      });
+      adIds.push(ad.id);
+    }
+
+    const metadata = await appClassifiedService.getPublicCategoryFilters(category.id);
+    assert.equal(metadata.attributes.length, 1);
+    assert.equal(metadata.attributes[0].id, attribute.id);
+    assert.equal(metadata.attributes[0].showInFilters, true);
+
+    const result = await appClassifiedService.listPublicAds({
+      page: 1,
+      pageSize: 20,
+      categoryId: category.id,
+      attributeFilters: [{
+        attributeId: attribute.id,
+        optionIds: [attribute.options[0].id],
+      }],
+    });
+    assert.equal(result.meta.total, 1);
+    assert.equal(result.items[0].id, adIds[0]);
+
+    await assert.rejects(
+      appClassifiedService.listPublicAds({
+        page: 1,
+        pageSize: 20,
+        categoryId: category.id,
+        attributeFilters: [{
+          attributeId: attribute.id,
+          optionIds: [999999999],
+        }],
+      }),
+      (error) => error.code === 'CLASSIFIED_ATTRIBUTE_FILTER_INVALID',
+    );
+  } finally {
+    if (adIds.length) {
+      await prisma.classifiedAd.deleteMany({ where: { id: { in: adIds } } });
+    }
+    if (category?.id) {
+      await prisma.classifiedCategory.delete({ where: { id: category.id } }).catch(() => {});
+    }
+    if (country?.id) {
+      await prisma.country.delete({ where: { id: country.id } }).catch(() => {});
+    }
+    if (user?.id) {
+      await prisma.appUser.delete({ where: { id: user.id } }).catch(() => {});
+    }
+  }
+});
+
+test('public classified detail exposes presentation data without private moderation fields', async () => {
+  const suffix = `${Date.now()}${Math.floor(Math.random() * 10000)}`;
+  let user;
+  let country;
+  let category;
+  let attribute;
+  let ad;
+
+  try {
+    user = await prisma.appUser.create({
+      data: {
+        phone: `+99298${suffix.slice(-7)}`,
+        firstName: 'Public',
+        lastName: 'Seller',
+        isActive: true,
+      },
+    });
+    country = await createLocation(suffix);
+    const city = country.cities[0];
+    const area = city.areas[0];
+    category = await prisma.classifiedCategory.create({
+      data: {
+        code: `public_detail_${suffix}`,
+        slug: `public-detail-${suffix}`,
+        title: 'Public detail category',
+        isActive: true,
+        allowAds: true,
+      },
+    });
+    attribute = await prisma.classifiedAttribute.create({
+      data: {
+        categoryId: category.id,
+        code: `surface_${suffix}`,
+        title: 'Surface',
+        type: 'NUMBER',
+        unit: 'm2',
+        isActive: true,
+      },
+    });
+    ad = await prisma.classifiedAd.create({
+      data: {
+        ...baseAdData({
+          publicCode: `PD${suffix.slice(-12)}`,
+          categoryId: category.id,
+          appUserId: user.id,
+          countryId: country.id,
+          cityId: city.id,
+          areaId: area.id,
+          phone: user.phone,
+        }),
+        status: 'PUBLISHED',
+        moderationNote: 'Must stay private',
+        publishedAt: new Date(),
+        expiresAt: new Date(Date.now() + 86400000),
+        images: {
+          create: {
+            imageUrl: '/uploads/classifieds/public-detail.jpg',
+            thumbnailUrl: '/uploads/classifieds/public-detail-thumb.jpg',
+            isCover: true,
+          },
+        },
+        attributeValues: {
+          create: {
+            attributeId: attribute.id,
+            numberValue: 92,
+          },
+        },
+      },
+    });
+
+    const detail = await appClassifiedService.getPublicAd(ad.id);
+    assert.equal(detail.id, ad.id);
+    assert.equal(detail.description, 'A complete classified description used by hardening tests.');
+    assert.equal(detail.contactPhone, user.phone);
+    assert.equal(detail.seller.name, 'Public Seller');
+    assert.equal(detail.images.length, 1);
+    assert.equal(detail.attributeValues[0].numberValue, 92);
+    assert.equal('moderationNote' in detail, false);
+    assert.equal('statusHistory' in detail, false);
+
+    await prisma.classifiedAd.update({
+      where: { id: ad.id },
+      data: { allowPhone: false },
+    });
+    const privateContact = await appClassifiedService.getPublicAd(ad.id);
+    assert.equal(privateContact.contactPhone, null);
+
+    await prisma.classifiedAd.update({
+      where: { id: ad.id },
+      data: { status: 'PAUSED' },
+    });
+    await assert.rejects(
+      appClassifiedService.getPublicAd(ad.id),
+      (error) => error.code === 'CLASSIFIED_NOT_FOUND',
+    );
+  } finally {
+    if (ad?.id) {
+      await prisma.classifiedAd.delete({ where: { id: ad.id } }).catch(() => {});
+    }
+    if (attribute?.id) {
+      await prisma.classifiedAttribute.delete({ where: { id: attribute.id } }).catch(() => {});
+    }
+    if (category?.id) {
+      await prisma.classifiedCategory.delete({ where: { id: category.id } }).catch(() => {});
+    }
+    if (country?.id) {
+      await prisma.country.delete({ where: { id: country.id } }).catch(() => {});
+    }
+    if (user?.id) {
+      await prisma.appUser.delete({ where: { id: user.id } }).catch(() => {});
+    }
   }
 });

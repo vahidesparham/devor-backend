@@ -34,7 +34,7 @@ const optionalBoolean = z.preprocess((value) => {
 const locationShape = {
   countryId: z.coerce.number().int().positive(),
   cityId: z.coerce.number().int().positive(),
-  areaId: nullablePositiveInt.optional(),
+  areaId: z.coerce.number().int().positive(),
   latitude: nullableNumber.optional(),
   longitude: nullableNumber.optional(),
   locationPrecision: z.enum(['APPROXIMATE', 'EXACT']).optional().default('APPROXIMATE'),
@@ -76,7 +76,7 @@ const updateAdSchema = z.object({
   categoryId: z.coerce.number().int().positive().optional(),
   countryId: z.coerce.number().int().positive().optional(),
   cityId: z.coerce.number().int().positive().optional(),
-  areaId: nullablePositiveInt.optional(),
+  areaId: z.coerce.number().int().positive().optional(),
   title: z.string().trim().max(120).optional(),
   description: z.string().trim().max(10000).optional(),
   priceType: priceTypeSchema.optional(),
@@ -104,11 +104,90 @@ const listMyAdsSchema = z.object({
   sortDir: z.enum(['asc', 'desc']).optional().default('desc'),
 });
 
+const csvPositiveIntArraySchema = z.preprocess((value) => {
+  if (Array.isArray(value)) return value;
+  if (typeof value !== 'string' || !value.trim()) return undefined;
+  return value.split(',').map((item) => item.trim()).filter(Boolean);
+}, z.array(z.coerce.number().int().positive()).max(100).optional());
+
+const publicAttributeFilterSchema = z.object({
+  attributeId: z.coerce.number().int().positive(),
+  optionIds: z.array(z.coerce.number().int().positive()).min(1).max(100).optional(),
+  minNumber: z.coerce.number().finite().optional(),
+  maxNumber: z.coerce.number().finite().optional(),
+  booleanValue: z.boolean().optional(),
+}).strict().superRefine((data, ctx) => {
+  const hasOptions = data.optionIds !== undefined;
+  const hasNumber = data.minNumber !== undefined || data.maxNumber !== undefined;
+  const hasBoolean = data.booleanValue !== undefined;
+  if ([hasOptions, hasNumber, hasBoolean].filter(Boolean).length !== 1) {
+    ctx.addIssue({
+      code: 'custom',
+      message: 'Each attribute filter must contain exactly one value type',
+    });
+  }
+  if (
+    data.minNumber !== undefined
+    && data.maxNumber !== undefined
+    && data.minNumber > data.maxNumber
+  ) {
+    ctx.addIssue({
+      code: 'custom',
+      path: ['maxNumber'],
+      message: 'Maximum value must be greater than or equal to minimum value',
+    });
+  }
+});
+
+const publicAttributeFiltersSchema = z.preprocess((value) => {
+  if (value === undefined || value === null || value === '') return undefined;
+  if (typeof value !== 'string') return value;
+  try {
+    return JSON.parse(value);
+  } catch (_) {
+    return value;
+  }
+}, z.array(publicAttributeFilterSchema).max(30).optional());
+
 const publicAdListSchema = z.object({
   page: z.coerce.number().int().min(1).optional().default(1),
   pageSize: z.coerce.number().int().min(1).max(50).optional().default(20),
   categoryId: z.coerce.number().int().positive().optional(),
   cityId: z.coerce.number().int().positive().optional(),
+  areaIds: csvPositiveIntArraySchema,
+  minPrice: z.coerce.number().min(0).optional(),
+  maxPrice: z.coerce.number().min(0).optional(),
+  attributeFilters: publicAttributeFiltersSchema,
+}).superRefine((data, ctx) => {
+  if (
+    data.minPrice !== undefined
+    && data.maxPrice !== undefined
+    && data.minPrice > data.maxPrice
+  ) {
+    ctx.addIssue({
+      code: 'custom',
+      path: ['maxPrice'],
+      message: 'Maximum price must be greater than or equal to minimum price',
+    });
+  }
+  if (data.attributeFilters?.length && !data.categoryId) {
+    ctx.addIssue({
+      code: 'custom',
+      path: ['categoryId'],
+      message: 'A category is required when filtering by classified attributes',
+    });
+  }
+  const attributeIds = (data.attributeFilters || []).map((item) => item.attributeId);
+  if (attributeIds.length !== new Set(attributeIds).size) {
+    ctx.addIssue({
+      code: 'custom',
+      path: ['attributeFilters'],
+      message: 'Each classified attribute can be filtered only once',
+    });
+  }
+});
+const publicCategoryListSchema = z.object({
+  parentId: z.coerce.number().int().positive().optional(),
 });
 
 const attributeValueSchema = z.object({
@@ -169,6 +248,7 @@ module.exports = {
   imageUploadBodySchema,
   listMyAdsSchema,
   publicAdListSchema,
+  publicCategoryListSchema,
   reorderImagesSchema,
   saveAttributeValuesSchema,
   updateAdSchema,

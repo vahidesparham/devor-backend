@@ -1381,7 +1381,7 @@ model ClassifiedAd {
   businessId        Int?
   countryId         Int
   cityId            Int
-  areaId            Int?
+  areaId            Int
   title             String                       @db.VarChar(120)
   description       String                       @db.Text
   priceType         ClassifiedPriceType
@@ -1418,7 +1418,7 @@ model ClassifiedAd {
   business          Business?                    @relation(fields: [businessId], references: [id], onDelete: Restrict)
   country           Country                      @relation(fields: [countryId], references: [id], onDelete: Restrict)
   city              City                         @relation(fields: [cityId], references: [id], onDelete: Restrict)
-  area              Area?                        @relation(fields: [areaId], references: [id], onDelete: SetNull)
+  area              Area                         @relation(fields: [areaId], references: [id], onDelete: Restrict)
   postingFeeTransaction AppWalletTransaction?    @relation("ClassifiedPostingFeeTransaction", fields: [postingFeeTransactionId], references: [id], onDelete: SetNull)
   images            ClassifiedAdImage[]
   attributeValues   ClassifiedAdAttributeValue[]

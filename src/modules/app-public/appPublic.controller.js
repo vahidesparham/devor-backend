@@ -57,6 +57,11 @@ async function cities(req, res) {
   return ok(res, { code: 'APP_CITY_LIST', data: data.items, meta: { lang: data.lang } });
 }
 
+async function areas(req, res) {
+  const data = await service.listAreas(req.query);
+  return ok(res, { code: 'APP_AREA_LIST', data: data.items, meta: { lang: data.lang } });
+}
+
 async function blogPosts(req, res) {
   const data = await service.listBlogPosts(req.query);
   return ok(res, { code: 'APP_BLOG_POST_LIST', data: data.items, meta: data.meta });
@@ -124,6 +129,7 @@ module.exports = {
   faqs,
   countries,
   cities,
+  areas,
   blogPosts,
   blogPost,
   businessDetail,

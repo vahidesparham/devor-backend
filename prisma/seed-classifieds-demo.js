@@ -218,6 +218,17 @@ async function seedLocationAndOwner() {
     update: { title: "دوشنبه", isActive: true },
     create: { countryId: country.id, code: "dushanbe", title: "دوشنبه", isActive: true },
   });
+  const area = await prisma.area.upsert({
+    where: { cityId_code: { cityId: city.id, code: "classified_demo_center" } },
+    update: { title: "مرکز شهر", isActive: true },
+    create: {
+      cityId: city.id,
+      code: "classified_demo_center",
+      title: "مرکز شهر",
+      displayOrder: 10,
+      isActive: true,
+    },
+  });
   const owner = await prisma.appUser.upsert({
     where: { phone: "+992900002200" },
     update: { firstName: "کاربر", lastName: "آگهی", isActive: true },
@@ -230,7 +241,7 @@ async function seedLocationAndOwner() {
       isActive: true,
     },
   });
-  return { country, city, owner };
+  return { country, city, area, owner };
 }
 
 async function seedAds(categoryByCode, context) {
@@ -251,7 +262,7 @@ async function seedAds(categoryByCode, context) {
       businessId: null,
       countryId: context.country.id,
       cityId: context.city.id,
-      areaId: null,
+      areaId: context.area.id,
       title,
       description: template.description,
       priceType: template.priceType,

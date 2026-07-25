@@ -607,6 +607,50 @@ async function listCities(lang) {
   };
 }
 
+async function listAreas(query) {
+  const { languages, selectedLanguage } = await resolveLanguage(query.lang);
+  const fallbackLanguage = languages.find((item) => item.isDefault) || languages[0];
+
+  const items = await prisma.area.findMany({
+    where: {
+      cityId: query.cityId,
+      isActive: true,
+      city: { isActive: true },
+    },
+    orderBy: [{ displayOrder: 'asc' }, { id: 'asc' }],
+    select: {
+      id: true,
+      cityId: true,
+      code: true,
+      title: true,
+      translations: {
+        where: {
+          lang: { in: [selectedLanguage.code, fallbackLanguage.code] },
+          isActive: true,
+        },
+        select: { lang: true, title: true },
+      },
+    },
+  });
+
+  return {
+    lang: selectedLanguage.code,
+    items: items.map((item) => {
+      const translation = pickTranslation(
+        item.translations,
+        selectedLanguage,
+        fallbackLanguage,
+      );
+      return {
+        id: item.id,
+        cityId: item.cityId,
+        code: item.code,
+        title: translation?.title || item.title,
+      };
+    }),
+  };
+}
+
 function pickTranslation(translations, selectedLanguage, fallbackLanguage) {
   const selectedTranslation = translations.find((translation) => translation.lang === selectedLanguage.code);
   const fallbackTranslation = translations.find((translation) => translation.lang === fallbackLanguage.code);
@@ -1993,6 +2037,7 @@ module.exports = {
   listFaqs,
   listCountries,
   listCities,
+  listAreas,
   listBlogPosts,
   getBlogPost,
   getBusinessDetail,
