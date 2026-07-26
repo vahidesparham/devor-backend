@@ -1,5 +1,7 @@
 const prisma = require('../../prisma');
 const { STATUSES, assertClassifiedTransition } = require('./classifiedLifecycle');
+const { DEFAULT_CLASSIFIED_SETTINGS } = require('./classifiedSettings');
+const { enqueueClassifiedStatusEvent } = require('../app-events/appEventOutbox.service');
 
 const EXPIRABLE_STATUSES = Object.freeze([
   STATUSES.PUBLISHED,
@@ -12,7 +14,14 @@ async function expireDueClassifiedAds({
   now = new Date(),
   batchSize = DEFAULT_BATCH_SIZE,
   db = prisma,
+  settings: settingsOverride,
 } = {}) {
+  const settingsRow = settingsOverride || (
+    db.classifiedSetting
+      ? await db.classifiedSetting.findUnique({ where: { id: 1 } })
+      : null
+  );
+  const settings = { ...DEFAULT_CLASSIFIED_SETTINGS, ...(settingsRow || {}) };
   const dueAds = await db.classifiedAd.findMany({
     where: {
       status: { in: EXPIRABLE_STATUSES },
@@ -26,6 +35,9 @@ async function expireDueClassifiedAds({
       status: true,
       version: true,
       expiresAt: true,
+      publicCode: true,
+      title: true,
+      appUserId: true,
     },
   });
 
@@ -61,6 +73,12 @@ async function expireDueClassifiedAds({
             processedAt: now.toISOString(),
           },
         },
+      });
+      await enqueueClassifiedStatusEvent(tx, {
+        ad,
+        status: STATUSES.EXPIRED,
+        version: ad.version + 1,
+        notificationsEnabled: settings.notificationsEnabled,
       });
       return true;
     });

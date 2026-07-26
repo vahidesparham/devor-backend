@@ -6,6 +6,7 @@ const optionalAppAuth = require('../../middlewares/optionalAppAuth');
 const controller = require('./appPublic.controller');
 const authController = require('./appAuth.controller');
 const appClassifiedRoutes = require('../app-classifieds/appClassified.routes');
+const appNotificationRoutes = require('../app-notifications/appNotification.routes');
 const { completeProfileSchema, refreshSchema, requestOtpSchema, verifyOtpSchema } = require('./appAuth.schemas');
 const {
   contentPageParamSchema,
@@ -98,6 +99,7 @@ router.post('/auth/refresh', validate(refreshSchema), authController.refresh);
 router.get('/auth/me', appAuth, authController.me);
 router.patch('/auth/profile', appAuth, validate(completeProfileSchema), authController.completeProfile);
 router.post('/auth/avatar', appAuth, imageUpload.single('image'), authController.uploadAvatar);
+router.use('/notifications', appNotificationRoutes);
 router.use('/classifieds', appClassifiedRoutes);
 
 module.exports = router;

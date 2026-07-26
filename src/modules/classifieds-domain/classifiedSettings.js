@@ -3,6 +3,7 @@ const CLASSIFIED_SETTING_LIMITS = Object.freeze({
   maxImagesPerAd: 100,
   maxTitleLength: 120,
   maxDescriptionLength: 10000,
+  chatStarterMessageLimit: 10,
 });
 
 const DEFAULT_CLASSIFIED_SETTINGS = Object.freeze({
@@ -18,9 +19,18 @@ const DEFAULT_CLASSIFIED_SETTINGS = Object.freeze({
   maxDescriptionLength: 2000,
   requireModeration: true,
   allowPhoneContact: true,
-  allowChatContact: false,
+  allowChatContact: true,
+  chatStarterMessageLimit: 3,
   allowBusinessClassifieds: false,
   viewDeduplicationMinutes: 30,
+  publicBrowseEnabled: true,
+  appUserPostingEnabled: true,
+  favoritesEnabled: true,
+  reportsEnabled: true,
+  notificationsEnabled: true,
+  maxReportsPerUserPerDay: 10,
+  mediaCleanupGraceHours: 24,
+  maintenanceMessage: null,
 });
 
 function validateClassifiedSettings(settings) {
@@ -35,6 +45,9 @@ function validateClassifiedSettings(settings) {
     'maxTitleLength',
     'maxDescriptionLength',
     'viewDeduplicationMinutes',
+    'maxReportsPerUserPerDay',
+    'mediaCleanupGraceHours',
+    'chatStarterMessageLimit',
   ];
 
   for (const field of positiveIntegerFields) {

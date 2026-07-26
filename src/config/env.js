@@ -16,6 +16,11 @@ function positiveNumber(value, fallback) {
   return Number.isFinite(parsed) && parsed > 0 ? parsed : fallback;
 }
 
+function booleanValue(value, fallback = false) {
+  if (value == null || value === '') return fallback;
+  return String(value).toLowerCase() === 'true';
+}
+
 required.forEach((key) => {
   if (!process.env[key]) {
     throw new Error(`Missing required env var: ${key}`);
@@ -38,6 +43,17 @@ const env = {
   CLASSIFIED_EXPIRY_SWEEP_INTERVAL_MS: Math.max(
     5000,
     positiveNumber(process.env.CLASSIFIED_EXPIRY_SWEEP_INTERVAL_MS, 60000),
+  ),
+  CLASSIFIED_EXPIRY_WORKER_ENABLED: booleanValue(process.env.CLASSIFIED_EXPIRY_WORKER_ENABLED, true),
+  APP_EVENT_WORKER_ENABLED: booleanValue(process.env.APP_EVENT_WORKER_ENABLED, true),
+  APP_EVENT_SWEEP_INTERVAL_MS: Math.max(
+    1000,
+    positiveNumber(process.env.APP_EVENT_SWEEP_INTERVAL_MS, 5000),
+  ),
+  CLASSIFIED_MEDIA_WORKER_ENABLED: booleanValue(process.env.CLASSIFIED_MEDIA_WORKER_ENABLED, true),
+  CLASSIFIED_MEDIA_SWEEP_INTERVAL_MS: Math.max(
+    60 * 60 * 1000,
+    positiveNumber(process.env.CLASSIFIED_MEDIA_SWEEP_INTERVAL_MS, 24 * 60 * 60 * 1000),
   ),
   LOG_404_ERRORS: String(process.env.LOG_404_ERRORS || 'false').toLowerCase() === 'true',
   LOG_VALIDATION_ERRORS: String(process.env.LOG_VALIDATION_ERRORS || 'false').toLowerCase() === 'true',

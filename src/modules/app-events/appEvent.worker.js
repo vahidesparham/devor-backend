@@ -1,13 +1,11 @@
-const {
-  expireDueClassifiedAds,
-} = require('./classifiedExpiry.service');
 const { runMonitoredJob } = require('../../shared/jobs/backgroundJobMonitor');
+const { dispatchPendingAppEvents } = require('./appEventOutbox.service');
 
-const DEFAULT_INTERVAL_MS = 60 * 1000;
+const DEFAULT_INTERVAL_MS = 5000;
 
-function startClassifiedExpiryWorker({
+function startAppEventWorker({
   intervalMs = DEFAULT_INTERVAL_MS,
-  onError = (error) => console.error('[classified-expiry-worker]', error),
+  onError = (error) => console.error('[app-event-worker]', error),
 } = {}) {
   let running = false;
   let stopped = false;
@@ -16,21 +14,23 @@ function startClassifiedExpiryWorker({
     if (running || stopped) return;
     running = true;
     try {
-      await runMonitoredJob('classified-expiry', async () => {
+      await runMonitoredJob('app-event-dispatch', async () => {
         let result;
         let scannedCount = 0;
-        let expiredCount = 0;
+        let processedCount = 0;
+        let failedCount = 0;
         do {
-          result = await expireDueClassifiedAds();
+          result = await dispatchPendingAppEvents();
           scannedCount += result.scannedCount;
-          expiredCount += result.expiredCount;
+          processedCount += result.processedCount;
+          failedCount += result.failedCount;
         } while (!stopped && result.hasMore);
         return {
           scannedCount,
-          affectedCount: expiredCount,
-          expiredCount,
+          affectedCount: processedCount,
+          metadata: { failedCount },
         };
-      }, { staleAfterMs: Math.max(intervalMs * 4, 5 * 60 * 1000) });
+      }, { staleAfterMs: Math.max(intervalMs * 4, 60 * 1000) });
     } catch (error) {
       onError(error);
     } finally {
@@ -50,5 +50,5 @@ function startClassifiedExpiryWorker({
 
 module.exports = {
   DEFAULT_INTERVAL_MS,
-  startClassifiedExpiryWorker,
+  startAppEventWorker,
 };

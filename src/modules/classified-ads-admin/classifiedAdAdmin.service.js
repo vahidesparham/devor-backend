@@ -12,6 +12,7 @@ const {
 } = require('../classifieds-domain/classifiedLifecycle');
 const { evaluateClassifiedReadiness } = require('../classifieds-domain/classifiedReadiness');
 const { DEFAULT_CLASSIFIED_SETTINGS } = require('../classifieds-domain/classifiedSettings');
+const { enqueueClassifiedStatusEvent } = require('../app-events/appEventOutbox.service');
 
 const OPEN_REPORT_STATUSES = ['OPEN', 'REVIEWING'];
 
@@ -411,6 +412,9 @@ async function moderateClassifiedAd(id, data, req, options) {
         errors: readiness.issues.map((item) => ({ path: item.field, message: item.message, code: item.code })),
       });
     }
+  } else {
+    const settingsRow = await prisma.classifiedSetting.findUnique({ where: { id: 1 } });
+    settings = { ...DEFAULT_CLASSIFIED_SETTINGS, ...(settingsRow || {}) };
   }
   if (options.assert) options.assert(ad);
 
@@ -440,6 +444,13 @@ async function moderateClassifiedAd(id, data, req, options) {
         note: data.note || null,
         metadata: readiness ? { readinessChecked: true } : undefined,
       },
+    });
+    await enqueueClassifiedStatusEvent(tx, {
+      ad,
+      status: options.to,
+      version: ad.version + 1,
+      note: data.note || null,
+      notificationsEnabled: settings.notificationsEnabled,
     });
     await audit(req, {
       action: 'UPDATE',

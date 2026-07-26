@@ -228,6 +228,22 @@
                 order: 30,
                 permission: "classified_reports.read",
             },
+            {
+                key: "classifiedChats",
+                title: "گفتگوهای آگهی",
+                route: "/classified-chats",
+                icon: "hgi-message-02",
+                order: 35,
+                permission: "classified_chats.read",
+            },
+            {
+                key: "classifiedOperations",
+                title: "عملیات و سلامت",
+                route: "/classified-operations",
+                icon: "hgi-dashboard-speed-02",
+                order: 40,
+                permission: "classified_operations.read",
+            },
         ],
     },
     {

@@ -17,7 +17,8 @@
     "seed:classifieds:taxonomy": "node scripts/strip-bom-prisma.js && node prisma/seed-classified-taxonomy.js",
     "seed:demo:content": "node scripts/strip-bom-prisma.js && node prisma/seed-content-demo.js",
     "test": "node --test \"tests/**/*.test.js\"",
-    "test:db": "node --test \"tests/**/*.integration.js\""
+    "test:db": "node --test \"tests/**/*.integration.js\"",
+    "test:classifieds:load": "node scripts/classifieds-load-smoke.js"
   },
   "dependencies": {
     "@prisma/client": "^6.5.0",

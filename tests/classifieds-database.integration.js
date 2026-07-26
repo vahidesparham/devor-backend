@@ -31,7 +31,16 @@ test('classified database foundation is migrated and seeded', async () => {
   assert.equal(settings.contentLanguage, 'fa');
   assert.equal(settings.currency, 'TJS');
   assert.equal(settings.allowBusinessClassifieds, false);
-  assert.equal(permissions.length, 16);
+  assert.equal(settings.publicBrowseEnabled, true);
+  assert.equal(settings.appUserPostingEnabled, true);
+  assert.equal(settings.allowChatContact, true);
+  assert.equal(settings.chatStarterMessageLimit, 3);
+  assert.equal(settings.maxReportsPerUserPerDay, 10);
+  assert.equal(permissions.length, 20);
+  assert.ok(permissions.some((item) => item.key === 'classified_chats.read'));
+  assert.ok(permissions.some((item) => item.key === 'classified_chats.moderate'));
+  assert.ok(permissions.some((item) => item.key === 'classified_operations.read'));
+  assert.ok(permissions.some((item) => item.key === 'classified_operations.run'));
   assert.deepEqual(
     new Set(imageConfigs.map((item) => item.code)),
     new Set([
@@ -59,6 +68,8 @@ test('classified database foundation is migrated and seeded', async () => {
       'chk_cls_status_history_change',
       'chk_cls_daily_counters',
       'chk_cls_report_version',
+      'chk_cls_settings_report_limit',
+      'chk_cls_settings_media_grace',
     ]),
   );
 });

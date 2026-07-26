@@ -78,6 +78,24 @@ enum BusinessContactLinkType {
   CUSTOM
 }
 
+enum EventOrganizerType {
+  ADMIN
+  BUSINESS
+  APP_USER
+}
+
+enum EventStatus {
+  DRAFT
+  PUBLISHED
+  CANCELLED
+  ENDED
+}
+
+enum EventPriceType {
+  FREE
+  PAID
+}
+
 enum AppWalletTransactionType {
   CREDIT
   DEBIT
@@ -135,6 +153,25 @@ enum ClassifiedActorType {
   SYSTEM
 }
 
+enum ClassifiedConversationStatus {
+  ACTIVE
+  BLOCKED
+  CLOSED
+}
+
+enum ClassifiedMessageSenderRole {
+  BUYER
+  OWNER
+}
+
+enum AppEventStatus {
+  PENDING
+  PROCESSING
+  PROCESSED
+  FAILED
+  DEAD
+}
+
 enum WeekDay {
   SATURDAY
   SUNDAY
@@ -146,21 +183,23 @@ enum WeekDay {
 }
 
 model AdminUser {
-  id                    Int                    @id @default(autoincrement())
-  email                 String                 @unique @db.VarChar(191)
-  firstName             String?                @db.VarChar(100)
-  lastName              String?                @db.VarChar(100)
-  avatar                String?                @db.VarChar(500)
-  passwordHash          String                 @db.VarChar(255)
-  isActive              Boolean                @default(true)
-  createdAt             DateTime               @default(now())
-  updatedAt             DateTime               @updatedAt
-  adminUserRoles        AdminUserRole[]
-  refreshTokens         RefreshToken[]
-  auditLogs             AuditLog[]
-  errorLogs             ErrorLog[]
-  appWalletTransactions AppWalletTransaction[]
-  classifiedReports     ClassifiedReport[]     @relation("ClassifiedReportReviewer")
+  id                             Int                      @id @default(autoincrement())
+  email                          String                   @unique @db.VarChar(191)
+  firstName                      String?                  @db.VarChar(100)
+  lastName                       String?                  @db.VarChar(100)
+  avatar                         String?                  @db.VarChar(500)
+  passwordHash                   String                   @db.VarChar(255)
+  isActive                       Boolean                  @default(true)
+  createdAt                      DateTime                 @default(now())
+  updatedAt                      DateTime                 @updatedAt
+  adminUserRoles                 AdminUserRole[]
+  refreshTokens                  RefreshToken[]
+  auditLogs                      AuditLog[]
+  errorLogs                      ErrorLog[]
+  appWalletTransactions          AppWalletTransaction[]
+  createdEvents                  Event[]                  @relation("EventCreatedByAdmin")
+  classifiedReports              ClassifiedReport[]       @relation("ClassifiedReportReviewer")
+  blockedClassifiedConversations ClassifiedConversation[] @relation("ClassifiedConversationBlockedBy")
 }
 
 model Role {
@@ -253,6 +292,8 @@ model Language {
   countryTranslations                     CountryTranslation[]
   cityTranslations                        CityTranslation[]
   areaTranslations                        AreaTranslation[]
+  eventCategoryTranslations               EventCategoryTranslation[]
+  eventTranslations                       EventTranslation[]
 
   @@index([isActive])
 }
@@ -454,6 +495,97 @@ model BlogPostTranslation {
   @@index([lang, title])
   @@index([lang, isActive])
   @@index([blogPostId])
+}
+
+model EventCategory {
+  id           Int                        @id @default(autoincrement())
+  code         String                     @unique @db.VarChar(80)
+  displayOrder Int                        @default(0)
+  isActive     Boolean                    @default(true)
+  createdAt    DateTime                   @default(now())
+  updatedAt    DateTime                   @updatedAt
+  translations EventCategoryTranslation[]
+  events       Event[]
+
+  @@index([isActive, displayOrder])
+  @@index([createdAt])
+}
+
+model EventCategoryTranslation {
+  id              Int           @id @default(autoincrement())
+  eventCategoryId Int
+  lang            String        @db.VarChar(20)
+  title           String        @db.VarChar(160)
+  isActive        Boolean       @default(true)
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
+  eventCategory   EventCategory @relation(fields: [eventCategoryId], references: [id], onDelete: Cascade)
+  language        Language      @relation(fields: [lang], references: [code], onDelete: Restrict, onUpdate: Cascade)
+
+  @@unique([eventCategoryId, lang])
+  @@index([lang, title])
+  @@index([lang, isActive])
+}
+
+model Event {
+  id               Int                @id @default(autoincrement())
+  categoryId       Int
+  cityId           Int
+  areaId           Int?
+  organizerType    EventOrganizerType @default(ADMIN)
+  createdByAdminId Int
+  businessId       Int?
+  appUserId        Int?
+  coverImage       String?            @db.VarChar(500)
+  startsAt         DateTime
+  endsAt           DateTime
+  latitude         Decimal?           @db.Decimal(10, 7)
+  longitude        Decimal?           @db.Decimal(10, 7)
+  priceType        EventPriceType     @default(FREE)
+  price            Decimal?           @db.Decimal(14, 2)
+  currency         String             @default("TJS") @db.VarChar(10)
+  contactPhone     String?            @db.VarChar(80)
+  externalUrl      String?            @db.VarChar(500)
+  status           EventStatus        @default(DRAFT)
+  isFeatured       Boolean            @default(false)
+  isActive         Boolean            @default(true)
+  publishedAt      DateTime?
+  createdAt        DateTime           @default(now())
+  updatedAt        DateTime           @updatedAt
+  category         EventCategory      @relation(fields: [categoryId], references: [id], onDelete: Restrict)
+  city             City               @relation(fields: [cityId], references: [id], onDelete: Restrict)
+  area             Area?              @relation(fields: [areaId], references: [id], onDelete: SetNull)
+  createdByAdmin   AdminUser          @relation("EventCreatedByAdmin", fields: [createdByAdminId], references: [id], onDelete: Restrict)
+  business         Business?          @relation(fields: [businessId], references: [id], onDelete: SetNull)
+  appUser          AppUser?           @relation(fields: [appUserId], references: [id], onDelete: SetNull)
+  translations     EventTranslation[]
+
+  @@index([categoryId, status, isActive, startsAt])
+  @@index([cityId, status, startsAt])
+  @@index([areaId])
+  @@index([status, isActive, endsAt])
+  @@index([isFeatured, status, startsAt])
+  @@index([businessId])
+  @@index([appUserId])
+}
+
+model EventTranslation {
+  id          Int      @id @default(autoincrement())
+  eventId     Int
+  lang        String   @db.VarChar(20)
+  title       String   @db.VarChar(255)
+  summary     String?  @db.VarChar(500)
+  description String?  @db.LongText
+  address     String?  @db.VarChar(500)
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  event       Event    @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  language    Language @relation(fields: [lang], references: [code], onDelete: Restrict, onUpdate: Cascade)
+
+  @@unique([eventId, lang])
+  @@index([lang, title])
+  @@index([lang, isActive])
 }
 
 model FaqCategory {
@@ -758,6 +890,7 @@ model City {
   areas         Area[]
   businesses    Business[]
   classifiedAds ClassifiedAd[]
+  events        Event[]
 
   @@unique([countryId, code])
   @@index([countryId, isActive, displayOrder])
@@ -792,6 +925,7 @@ model Area {
   translations  AreaTranslation[]
   businesses    Business[]
   classifiedAds ClassifiedAd[]
+  events        Event[]
 
   @@unique([cityId, code])
   @@index([cityId, isActive, displayOrder])
@@ -859,6 +993,7 @@ model Business {
   reviews             BusinessReview[]
   appFavorites        AppFavoriteBusiness[]
   classifiedAds       ClassifiedAd[]
+  events              Event[]
 
   @@index([serviceTypeId, isActive, displayOrder])
   @@index([countryId])
@@ -1175,25 +1310,31 @@ model BusinessRefreshToken {
 }
 
 model AppUser {
-  id                  Int                    @id @default(autoincrement())
-  phone               String                 @unique @db.VarChar(80)
-  countryCode         String?                @db.VarChar(10)
-  phoneCode           String?                @db.VarChar(20)
-  avatar              String?                @db.VarChar(500)
-  email               String?                @unique @db.VarChar(191)
-  firstName           String?                @db.VarChar(100)
-  lastName            String?                @db.VarChar(100)
-  isActive            Boolean                @default(true)
-  createdAt           DateTime               @default(now())
-  updatedAt           DateTime               @updatedAt
-  refreshTokens       AppRefreshToken[]
-  businessReviews     BusinessReview[]
-  favoriteBusinesses  AppFavoriteBusiness[]
-  wallet              AppWallet?
-  walletTransactions  AppWalletTransaction[]
-  classifiedAds       ClassifiedAd[]
-  classifiedFavorites ClassifiedFavorite[]
-  classifiedReports   ClassifiedReport[]
+  id                           Int                      @id @default(autoincrement())
+  phone                        String                   @unique @db.VarChar(80)
+  countryCode                  String?                  @db.VarChar(10)
+  phoneCode                    String?                  @db.VarChar(20)
+  avatar                       String?                  @db.VarChar(500)
+  email                        String?                  @unique @db.VarChar(191)
+  firstName                    String?                  @db.VarChar(100)
+  lastName                     String?                  @db.VarChar(100)
+  isActive                     Boolean                  @default(true)
+  createdAt                    DateTime                 @default(now())
+  updatedAt                    DateTime                 @updatedAt
+  refreshTokens                AppRefreshToken[]
+  businessReviews              BusinessReview[]
+  favoriteBusinesses           AppFavoriteBusiness[]
+  wallet                       AppWallet?
+  walletTransactions           AppWalletTransaction[]
+  classifiedAds                ClassifiedAd[]
+  events                       Event[]
+  classifiedFavorites          ClassifiedFavorite[]
+  classifiedReports            ClassifiedReport[]
+  classifiedBuyerConversations ClassifiedConversation[] @relation("ClassifiedConversationBuyer")
+  classifiedOwnerConversations ClassifiedConversation[] @relation("ClassifiedConversationOwner")
+  classifiedMessages           ClassifiedMessage[]
+  eventOutbox                  AppEventOutbox[]         @relation("AppEventRecipient")
+  notifications                AppNotification[]
 
   @@index([countryCode])
   @@index([isActive])
@@ -1296,11 +1437,80 @@ model ClassifiedSetting {
   maxDescriptionLength     Int      @default(2000)
   requireModeration        Boolean  @default(true)
   allowPhoneContact        Boolean  @default(true)
-  allowChatContact         Boolean  @default(false)
+  allowChatContact         Boolean  @default(true)
+  chatStarterMessageLimit  Int      @default(3)
   allowBusinessClassifieds Boolean  @default(false)
   viewDeduplicationMinutes Int      @default(30)
+  publicBrowseEnabled      Boolean  @default(true)
+  appUserPostingEnabled    Boolean  @default(true)
+  favoritesEnabled         Boolean  @default(true)
+  reportsEnabled           Boolean  @default(true)
+  notificationsEnabled     Boolean  @default(true)
+  maxReportsPerUserPerDay  Int      @default(10)
+  mediaCleanupGraceHours   Int      @default(24)
+  maintenanceMessage       String?  @db.VarChar(500)
   createdAt                DateTime @default(now())
   updatedAt                DateTime @updatedAt
+}
+
+model AppEventOutbox {
+  id                 BigInt           @id @default(autoincrement())
+  eventType          String           @db.VarChar(100)
+  aggregateType      String           @db.VarChar(80)
+  aggregateId        String           @db.VarChar(120)
+  recipientAppUserId Int?
+  payload            Json
+  dedupeKey          String           @unique @db.VarChar(191)
+  status             AppEventStatus   @default(PENDING)
+  attempts           Int              @default(0)
+  availableAt        DateTime         @default(now())
+  lockedAt           DateTime?
+  lockToken          String?          @db.VarChar(80)
+  processedAt        DateTime?
+  lastError          String?          @db.VarChar(1000)
+  createdAt          DateTime         @default(now())
+  updatedAt          DateTime         @updatedAt
+  recipient          AppUser?         @relation("AppEventRecipient", fields: [recipientAppUserId], references: [id], onDelete: Cascade)
+  notification       AppNotification?
+
+  @@index([status, availableAt, id])
+  @@index([recipientAppUserId, createdAt])
+  @@index([aggregateType, aggregateId, createdAt])
+  @@index([lockToken])
+}
+
+model AppNotification {
+  id            BigInt          @id @default(autoincrement())
+  appUserId     Int
+  sourceEventId BigInt?         @unique
+  type          String          @db.VarChar(100)
+  title         String          @db.VarChar(160)
+  body          String          @db.VarChar(500)
+  data          Json?
+  readAt        DateTime?
+  createdAt     DateTime        @default(now())
+  appUser       AppUser         @relation(fields: [appUserId], references: [id], onDelete: Cascade)
+  sourceEvent   AppEventOutbox? @relation(fields: [sourceEventId], references: [id], onDelete: SetNull)
+
+  @@index([appUserId, readAt, createdAt])
+  @@index([appUserId, createdAt])
+}
+
+model BackgroundJobState {
+  jobName             String    @id @db.VarChar(100)
+  isRunning           Boolean   @default(false)
+  lastStartedAt       DateTime?
+  lastSucceededAt     DateTime?
+  lastFailedAt        DateTime?
+  lastDurationMs      Int?
+  lastScannedCount    Int       @default(0)
+  lastAffectedCount   Int       @default(0)
+  consecutiveFailures Int       @default(0)
+  lastError           String?   @db.VarChar(1000)
+  metadata            Json?
+  updatedAt           DateTime  @updatedAt
+
+  @@index([isRunning, updatedAt])
 }
 
 model ClassifiedCategory {
@@ -1398,7 +1608,7 @@ model ClassifiedAd {
   contactName             String?                      @db.VarChar(120)
   contactPhone            String                       @db.VarChar(80)
   allowPhone              Boolean                      @default(true)
-  allowChat               Boolean                      @default(false)
+  allowChat               Boolean                      @default(true)
   latitude                Decimal?                     @db.Decimal(10, 7)
   longitude               Decimal?                     @db.Decimal(10, 7)
   locationPrecision       ClassifiedLocationPrecision  @default(APPROXIMATE)
@@ -1434,6 +1644,7 @@ model ClassifiedAd {
   reports                 ClassifiedReport[]
   statusHistory           ClassifiedAdStatusHistory[]
   dailyViews              ClassifiedAdViewDaily[]
+  conversations           ClassifiedConversation[]
 
   @@index([status, cityId, publishedAt])
   @@index([status, categoryId, publishedAt])
@@ -1443,6 +1654,52 @@ model ClassifiedAd {
   @@index([priceType, price])
   @@index([expiresAt, status])
   @@index([deletedAt])
+}
+
+model ClassifiedConversation {
+  id                  BigInt                       @id @default(autoincrement())
+  adId                Int
+  buyerAppUserId      Int
+  ownerAppUserId      Int
+  status              ClassifiedConversationStatus @default(ACTIVE)
+  starterMessageCount Int                          @default(0)
+  ownerRepliedAt      DateTime?
+  buyerUnreadCount    Int                          @default(0)
+  ownerUnreadCount    Int                          @default(0)
+  lastMessageAt       DateTime?
+  lastMessagePreview  String?                      @db.VarChar(200)
+  blockedByAdminId    Int?
+  blockedReason       String?                      @db.VarChar(500)
+  blockedAt           DateTime?
+  createdAt           DateTime                     @default(now())
+  updatedAt           DateTime                     @updatedAt
+  ad                  ClassifiedAd                 @relation(fields: [adId], references: [id], onDelete: Cascade)
+  buyer               AppUser                      @relation("ClassifiedConversationBuyer", fields: [buyerAppUserId], references: [id], onDelete: Cascade)
+  owner               AppUser                      @relation("ClassifiedConversationOwner", fields: [ownerAppUserId], references: [id], onDelete: Cascade)
+  blockedBy           AdminUser?                   @relation("ClassifiedConversationBlockedBy", fields: [blockedByAdminId], references: [id], onDelete: SetNull)
+  messages            ClassifiedMessage[]
+
+  @@unique([adId, buyerAppUserId])
+  @@index([buyerAppUserId, lastMessageAt])
+  @@index([ownerAppUserId, lastMessageAt])
+  @@index([status, lastMessageAt])
+  @@index([blockedByAdminId])
+}
+
+model ClassifiedMessage {
+  id              BigInt                      @id @default(autoincrement())
+  conversationId  BigInt
+  senderAppUserId Int
+  senderRole      ClassifiedMessageSenderRole
+  clientMessageId String                      @db.VarChar(80)
+  body            String                      @db.Text
+  createdAt       DateTime                    @default(now())
+  conversation    ClassifiedConversation      @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  sender          AppUser                     @relation(fields: [senderAppUserId], references: [id], onDelete: Cascade)
+
+  @@unique([conversationId, senderAppUserId, clientMessageId], map: "classified_message_client_id_key")
+  @@index([conversationId, id])
+  @@index([senderAppUserId, createdAt])
 }
 
 model ClassifiedAdImage {

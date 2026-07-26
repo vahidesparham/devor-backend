@@ -6,6 +6,7 @@ const prisma = require('../../prisma');
 const { AppError } = require('../../shared/http/response');
 const uploadService = require('../uploads/upload.service');
 const { debitAppWallet } = require('../app-wallets/appWalletLedger.service');
+const { enqueueClassifiedStatusEvent } = require('../app-events/appEventOutbox.service');
 const {
   getCategoryPath,
   isCategoryPubliclySelectable,
@@ -556,6 +557,8 @@ async function getPublicAd(id, appUserId = null) {
 async function createAdReport(appUser, id, input) {
   const adId = Number(id);
   const now = new Date();
+  const settings = await getSettings();
+  const reportWindowStart = new Date(now.getTime() - 24 * 60 * 60 * 1000);
   const result = await prisma.$transaction(async (tx) => {
     const lockedAds = await tx.$queryRaw`
       SELECT id
@@ -584,6 +587,26 @@ async function createAdReport(appUser, id, input) {
         409,
         'CLASSIFIED_OWN_REPORT_FORBIDDEN',
         'You cannot report your own classified ad',
+      );
+    }
+
+    const recentReportCount = await tx.classifiedReport.count({
+      where: {
+        reporterAppUserId: appUser.id,
+        createdAt: { gte: reportWindowStart },
+      },
+    });
+    if (recentReportCount >= settings.maxReportsPerUserPerDay) {
+      throw new AppError(
+        429,
+        'CLASSIFIED_REPORT_DAILY_LIMIT_REACHED',
+        'Daily classified report limit reached',
+        {
+          details: {
+            limit: settings.maxReportsPerUserPerDay,
+            windowHours: 24,
+          },
+        },
       );
     }
 
@@ -1085,6 +1108,8 @@ async function getPostingConfig(appUser) {
     }),
   ]);
   return {
+    postingEnabled: settings.appUserPostingEnabled,
+    maintenanceMessage: settings.maintenanceMessage,
     contentLanguage: settings.contentLanguage,
     currency: settings.currency,
     publicationDays: settings.publicationDays,
@@ -1179,7 +1204,7 @@ async function createDraft(appUser, data) {
   ]);
   assertContent(data, settings);
   const allowPhone = data.allowPhone ?? settings.allowPhoneContact;
-  const allowChat = data.allowChat ?? false;
+  const allowChat = data.allowChat ?? settings.allowChatContact;
   assertContactSettings({ allowPhone, allowChat }, settings);
   const price = normalizePrice(data.priceType, data.price);
   const publicCode = await nextPublicCode();
@@ -1756,6 +1781,14 @@ async function transitionAd(appUser, id, expectedVersion, options) {
     }
 
     await tx.classifiedAdStatusHistory.createMany({ data: historyRows });
+    if (options.autoPublish && finalStatus === STATUSES.PUBLISHED) {
+      await enqueueClassifiedStatusEvent(tx, {
+        ad,
+        status: STATUSES.PUBLISHED,
+        version: ad.version + 1,
+        notificationsEnabled: settings.notificationsEnabled,
+      });
+    }
   });
   const result = await getMyAd(appUser, ad.id);
   return { ...result, status: finalStatus };
