@@ -57,6 +57,8 @@ async function getAdminDashboard() {
     missingWorkingHours,
     missingContact,
     signupChart,
+    classifiedStatusRows,
+    classifiedReportStatusRows,
   ] = await Promise.all([
     prisma.business.count(),
     prisma.business.count({ where: { publicationStatus: 'PENDING_REVIEW' } }),
@@ -79,6 +81,15 @@ async function getAdminDashboard() {
       },
     }),
     buildSignupChart(),
+    prisma.classifiedAd.groupBy({
+      by: ['status'],
+      where: { deletedAt: null },
+      _count: { _all: true },
+    }),
+    prisma.classifiedReport.groupBy({
+      by: ['status'],
+      _count: { _all: true },
+    }),
   ]);
 
   const quality = {
@@ -87,6 +98,12 @@ async function getAdminDashboard() {
     missingWorkingHours,
     missingContact,
   };
+  const classifiedByStatus = Object.fromEntries(
+    classifiedStatusRows.map((row) => [row.status, row._count._all]),
+  );
+  const classifiedReportsByStatus = Object.fromEntries(
+    classifiedReportStatusRows.map((row) => [row.status, row._count._all]),
+  );
 
   return {
     readinessScore: calculateReadinessScore(totalBusinesses, quality),
@@ -95,6 +112,14 @@ async function getAdminDashboard() {
       pendingReviews,
       businessUsers,
       offerings,
+    },
+    classifieds: {
+      totalAds: classifiedStatusRows.reduce((total, row) => total + row._count._all, 0),
+      pendingReview: classifiedByStatus.PENDING_REVIEW || 0,
+      published: classifiedByStatus.PUBLISHED || 0,
+      openReports:
+        (classifiedReportsByStatus.OPEN || 0) +
+        (classifiedReportsByStatus.REVIEWING || 0),
     },
     quality,
     signupChart,

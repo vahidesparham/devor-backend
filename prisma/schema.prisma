@@ -66,6 +66,18 @@ enum BusinessPublicationStatus {
   SUSPENDED
 }
 
+enum BusinessOfferScope {
+  ALL
+  CATEGORY
+  OFFERINGS
+}
+
+enum BusinessOfferPublicationStatus {
+  DRAFT
+  PUBLISHED
+  PAUSED
+}
+
 enum BusinessContactLinkType {
   PHONE
   MOBILE
@@ -289,6 +301,7 @@ model Language {
   businessOfferingTranslations            BusinessOfferingTranslation[]
   businessOfferingOptionGroupTranslations BusinessOfferingOptionGroupTranslation[]
   businessOfferingOptionTranslations      BusinessOfferingOptionTranslation[]
+  businessOfferTranslations               BusinessOfferTranslation[]
   countryTranslations                     CountryTranslation[]
   cityTranslations                        CityTranslation[]
   areaTranslations                        AreaTranslation[]
@@ -990,6 +1003,7 @@ model Business {
   businessRoles       BusinessRole[]
   offeringCategories  BusinessOfferingCategory[]
   offerings           BusinessOffering[]
+  offers              BusinessOffer[]
   reviews             BusinessReview[]
   appFavorites        AppFavoriteBusiness[]
   classifiedAds       ClassifiedAd[]
@@ -1124,6 +1138,7 @@ model BusinessOfferingCategory {
   business     Business                              @relation(fields: [businessId], references: [id], onDelete: Cascade)
   translations BusinessOfferingCategoryTranslation[]
   offerings    BusinessOffering[]
+  offers       BusinessOffer[]
 
   @@index([businessId, isActive, displayOrder])
 }
@@ -1165,6 +1180,7 @@ model BusinessOffering {
   category           BusinessOfferingCategory?     @relation(fields: [categoryId], references: [id], onDelete: SetNull)
   translations       BusinessOfferingTranslation[]
   optionGroups       BusinessOfferingOptionGroup[]
+  offerTargets       BusinessOfferTarget[]
 
   @@index([businessId, isActive, displayOrder])
   @@index([categoryId])
@@ -1189,6 +1205,58 @@ model BusinessOfferingTranslation {
   @@unique([offeringId, lang])
   @@index([lang, title])
   @@index([lang, isActive])
+}
+
+model BusinessOffer {
+  id                Int                            @id @default(autoincrement())
+  businessId        Int
+  categoryId        Int?
+  title             String                         @db.VarChar(180)
+  image             String?                        @db.VarChar(500)
+  discountPercent   Int
+  scope             BusinessOfferScope
+  publicationStatus BusinessOfferPublicationStatus @default(DRAFT)
+  startsAt          DateTime
+  endsAt            DateTime
+  displayOrder      Int                            @default(0)
+  createdAt         DateTime                       @default(now())
+  updatedAt         DateTime                       @updatedAt
+  business          Business                       @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  category          BusinessOfferingCategory?      @relation(fields: [categoryId], references: [id], onDelete: SetNull)
+  translations      BusinessOfferTranslation[]
+  targets           BusinessOfferTarget[]
+
+  @@index([businessId, publicationStatus, startsAt, endsAt])
+  @@index([businessId, displayOrder])
+  @@index([categoryId])
+}
+
+model BusinessOfferTranslation {
+  id          Int           @id @default(autoincrement())
+  offerId     Int
+  lang        String        @db.VarChar(20)
+  title       String        @db.VarChar(180)
+  description String?       @db.VarChar(500)
+  isActive    Boolean       @default(true)
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+  offer       BusinessOffer @relation(fields: [offerId], references: [id], onDelete: Cascade)
+  language    Language      @relation(fields: [lang], references: [code], onDelete: Restrict, onUpdate: Cascade)
+
+  @@unique([offerId, lang])
+  @@index([lang, title])
+  @@index([lang, isActive])
+}
+
+model BusinessOfferTarget {
+  offerId    Int
+  offeringId Int
+  createdAt  DateTime         @default(now())
+  offer      BusinessOffer    @relation(fields: [offerId], references: [id], onDelete: Cascade)
+  offering   BusinessOffering @relation(fields: [offeringId], references: [id], onDelete: Cascade)
+
+  @@id([offerId, offeringId])
+  @@index([offeringId])
 }
 
 model BusinessOfferingOptionGroup {

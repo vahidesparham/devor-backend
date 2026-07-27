@@ -247,6 +247,30 @@
         ],
     },
     {
+        key: "events",
+        title: "رویدادها",
+        icon: "hgi-calendar-03",
+        order: 28.75,
+        items: [
+            {
+                key: "eventCategories",
+                title: "دسته‌بندی رویدادها",
+                route: "/event-categories",
+                icon: "hgi-folder-01",
+                order: 10,
+                permission: "event_categories.read",
+            },
+            {
+                key: "eventsManagement",
+                title: "مدیریت رویدادها",
+                route: "/events",
+                icon: "hgi-calendar-03",
+                order: 20,
+                permission: "events.read",
+            },
+        ],
+    },
+    {
         key: "countriesRegions",
         title: "کشورها و محله‌ها",
         icon: "hgi-location-03",

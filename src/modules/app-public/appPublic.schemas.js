@@ -81,6 +81,25 @@ const publicBusinessListQuerySchema = langQuerySchema.extend({
   attributeOptionIds: csvNumberArraySchema,
 });
 
+const offerRangeKeySchema = z.enum([
+  'UP_TO_10',
+  'FROM_11_TO_20',
+  'FROM_21_TO_30',
+  'FROM_31_TO_50',
+  'OVER_50',
+]);
+
+const publicOfferRangesQuerySchema = langQuerySchema.extend({
+  cityId: z.coerce.number().int().positive().optional(),
+});
+
+const publicOfferBusinessListQuerySchema = langQuerySchema.extend({
+  rangeKey: offerRangeKeySchema,
+  cityId: z.coerce.number().int().positive().optional(),
+  page: z.coerce.number().int().min(1).optional().default(1),
+  pageSize: z.coerce.number().int().min(1).max(50).optional().default(20),
+});
+
 const publicBusinessFiltersQuerySchema = langQuerySchema.extend({
   serviceTypeId: z.coerce.number().int().positive().optional(),
 });
@@ -122,6 +141,8 @@ module.exports = {
   publicHomeQuerySchema,
   publicExploreQuerySchema,
   publicBusinessListQuerySchema,
+  publicOfferRangesQuerySchema,
+  publicOfferBusinessListQuerySchema,
   publicBusinessFiltersQuerySchema,
   publicAreaListQuerySchema,
   contentPageParamSchema,

@@ -10,6 +10,9 @@ const {
 const {
     startAppEventWorker,
 } = require("./modules/app-events/appEvent.worker");
+const {
+    startEventLifecycleWorker,
+} = require("./modules/events/eventLifecycle.worker");
 
 const server = app.listen(env.PORT, () => {
     // eslint-disable-next-line no-console
@@ -25,6 +28,11 @@ const stopAppEventWorker = env.APP_EVENT_WORKER_ENABLED
         intervalMs: env.APP_EVENT_SWEEP_INTERVAL_MS,
     })
     : () => {};
+const stopEventLifecycleWorker = env.EVENT_LIFECYCLE_WORKER_ENABLED
+    ? startEventLifecycleWorker({
+        intervalMs: env.EVENT_LIFECYCLE_SWEEP_INTERVAL_MS,
+    })
+    : () => {};
 const stopClassifiedMediaWorker = env.CLASSIFIED_MEDIA_WORKER_ENABLED
     ? startClassifiedMediaMaintenanceWorker({
         intervalMs: env.CLASSIFIED_MEDIA_SWEEP_INTERVAL_MS,
@@ -37,6 +45,7 @@ async function shutdown(signal) {
 
     stopClassifiedExpiryWorker();
     stopAppEventWorker();
+    stopEventLifecycleWorker();
     stopClassifiedMediaWorker();
     server.close(async () => {
         try {

@@ -43,6 +43,7 @@ const offeringCategoryRoutes = require('../modules/business-offering-categories/
 const offeringRoutes = require('../modules/business-offerings/businessOffering.routes');
 const offeringOptionGroupRoutes = require('../modules/business-offering-option-groups/businessOfferingOptionGroup.routes');
 const offeringOptionRoutes = require('../modules/business-offering-options/businessOfferingOption.routes');
+const businessOfferRoutes = require('../modules/business-offers/businessOffer.routes');
 const auditLogRoutes = require('../modules/audit-logs/auditLog.routes');
 const errorLogRoutes = require('../modules/error-logs/errorLog.routes');
 const menuRoutes = require('../modules/menu/menu.routes');
@@ -98,6 +99,7 @@ router.use('/offering-categories', offeringCategoryRoutes);
 router.use('/offerings', offeringRoutes);
 router.use('/offering-option-groups', offeringOptionGroupRoutes);
 router.use('/offering-options', offeringOptionRoutes);
+router.use('/business-offers', businessOfferRoutes);
 router.use('/audit-logs', auditLogRoutes);
 router.use('/error-logs', errorLogRoutes);
 router.use('/menu', menuRoutes);

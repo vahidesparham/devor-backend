@@ -199,10 +199,18 @@ async function deleteEventCategory(id, req) {
   });
 }
 
+async function getNextDisplayOrder() {
+  const aggregate = await prisma.eventCategory.aggregate({
+    _max: { displayOrder: true },
+  });
+  return (aggregate._max.displayOrder ?? 0) + 10;
+}
+
 module.exports = {
   listEventCategories,
   getEventCategoryById,
   createEventCategory,
   updateEventCategory,
   deleteEventCategory,
+  getNextDisplayOrder,
 };

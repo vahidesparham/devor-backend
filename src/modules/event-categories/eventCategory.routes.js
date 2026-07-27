@@ -20,6 +20,12 @@ router.get(
   controller.listEventCategories,
 );
 router.get(
+  '/next-display-order',
+  auth,
+  requirePermission('event_categories.create'),
+  controller.getNextDisplayOrder,
+);
+router.get(
   '/:id',
   auth,
   requirePermission('event_categories.read'),

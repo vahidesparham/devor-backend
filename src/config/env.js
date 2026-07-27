@@ -50,6 +50,11 @@ const env = {
     1000,
     positiveNumber(process.env.APP_EVENT_SWEEP_INTERVAL_MS, 5000),
   ),
+  EVENT_LIFECYCLE_WORKER_ENABLED: booleanValue(process.env.EVENT_LIFECYCLE_WORKER_ENABLED, true),
+  EVENT_LIFECYCLE_SWEEP_INTERVAL_MS: Math.max(
+    5000,
+    positiveNumber(process.env.EVENT_LIFECYCLE_SWEEP_INTERVAL_MS, 60000),
+  ),
   CLASSIFIED_MEDIA_WORKER_ENABLED: booleanValue(process.env.CLASSIFIED_MEDIA_WORKER_ENABLED, true),
   CLASSIFIED_MEDIA_SWEEP_INTERVAL_MS: Math.max(
     60 * 60 * 1000,

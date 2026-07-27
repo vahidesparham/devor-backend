@@ -6,6 +6,7 @@ const optionalAppAuth = require('../../middlewares/optionalAppAuth');
 const controller = require('./appPublic.controller');
 const authController = require('./appAuth.controller');
 const appClassifiedRoutes = require('../app-classifieds/appClassified.routes');
+const appEventPublicRoutes = require('../app-events-public/appEventPublic.routes');
 const appNotificationRoutes = require('../app-notifications/appNotification.routes');
 const { completeProfileSchema, refreshSchema, requestOtpSchema, verifyOtpSchema } = require('./appAuth.schemas');
 const {
@@ -15,6 +16,8 @@ const {
   publicExploreQuerySchema,
   publicBusinessListQuerySchema,
   publicBusinessFiltersQuerySchema,
+  publicOfferRangesQuerySchema,
+  publicOfferBusinessListQuerySchema,
   publicAreaListQuerySchema,
   publicBlogListQuerySchema,
   publicBlogPostParamSchema,
@@ -38,6 +41,8 @@ router.get('/home', validate(publicHomeQuerySchema, 'query'), controller.home);
 router.get('/explore', optionalAppAuth, validate(publicExploreQuerySchema, 'query'), controller.explore);
 router.get('/businesses', optionalAppAuth, validate(publicBusinessListQuerySchema, 'query'), controller.businesses);
 router.get('/business-filters', validate(publicBusinessFiltersQuerySchema, 'query'), controller.businessFilters);
+router.get('/offers/ranges', validate(publicOfferRangesQuerySchema, 'query'), controller.offerRanges);
+router.get('/offers/businesses', optionalAppAuth, validate(publicOfferBusinessListQuerySchema, 'query'), controller.offerBusinesses);
 router.get('/onboarding-pages', validate(langQuerySchema, 'query'), controller.onboardingPages);
 router.get('/faqs', validate(langQuerySchema, 'query'), controller.faqs);
 router.get('/countries', validate(langQuerySchema, 'query'), controller.countries);
@@ -101,5 +106,6 @@ router.patch('/auth/profile', appAuth, validate(completeProfileSchema), authCont
 router.post('/auth/avatar', appAuth, imageUpload.single('image'), authController.uploadAvatar);
 router.use('/notifications', appNotificationRoutes);
 router.use('/classifieds', appClassifiedRoutes);
+router.use('/events', appEventPublicRoutes);
 
 module.exports = router;

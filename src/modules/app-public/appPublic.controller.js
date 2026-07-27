@@ -27,6 +27,16 @@ async function businessFilters(req, res) {
   return ok(res, { code: 'APP_BUSINESS_FILTERS', data, meta: { lang: data.lang } });
 }
 
+async function offerRanges(req, res) {
+  const data = await service.listOfferRanges(req.query);
+  return ok(res, { code: 'APP_OFFER_RANGES', data: data.items, meta: { lang: data.lang } });
+}
+
+async function offerBusinesses(req, res) {
+  const data = await service.listOfferBusinesses(req.query, req.appUser?.id || null);
+  return ok(res, { code: 'APP_OFFER_BUSINESS_LIST', data: data.items, meta: data.meta });
+}
+
 async function onboardingPages(req, res) {
   const data = await service.listOnboardingPages(req.query.lang);
   return ok(res, { code: 'APP_ONBOARDING_PAGES', data: data.items, meta: { lang: data.lang } });
@@ -123,6 +133,8 @@ module.exports = {
   explore,
   businesses,
   businessFilters,
+  offerRanges,
+  offerBusinesses,
   onboardingPages,
   contentPage,
   contactPage,

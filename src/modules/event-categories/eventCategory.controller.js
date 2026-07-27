@@ -26,10 +26,19 @@ async function deleteEventCategory(req, res) {
   return ok(res, { code: 'EVENT_CATEGORY_DELETE_SUCCESS', data: null });
 }
 
+async function getNextDisplayOrder(req, res) {
+  const displayOrder = await service.getNextDisplayOrder();
+  return ok(res, {
+    code: 'EVENT_CATEGORY_NEXT_DISPLAY_ORDER_SUCCESS',
+    data: { displayOrder },
+  });
+}
+
 module.exports = {
   listEventCategories,
   getEventCategoryById,
   createEventCategory,
   updateEventCategory,
   deleteEventCategory,
+  getNextDisplayOrder,
 };

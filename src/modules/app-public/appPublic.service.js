@@ -1,6 +1,11 @@
 const prisma = require('../../prisma');
 const { AppError } = require('../../shared/http/response');
 const { getDescendantServiceTypeIds, getRootServiceTypeId } = require('../service-types/serviceTypeHierarchy');
+const {
+  DISCOUNT_RANGES,
+  calculateDiscountedPrice,
+  discountBelongsToRange,
+} = require('../business-offers/businessOffer.domain');
 
 function toPublicAsset(url) {
   if (!url) return null;
@@ -981,6 +986,43 @@ async function listBusinessCategories(serviceTypeId, selectedLanguage, fallbackL
   return categories.map((item) => serviceTypePublicPayload(item, selectedLanguage, fallbackLanguage));
 }
 
+function activeOfferWhere(now = new Date()) {
+  return {
+    publicationStatus: 'PUBLISHED',
+    startsAt: { lte: now },
+    endsAt: { gt: now },
+  };
+}
+
+async function getActiveOfferSummaryRows({ businessIds, cityId, now = new Date() } = {}) {
+  if (Array.isArray(businessIds) && businessIds.length === 0) return [];
+  return prisma.businessOffer.groupBy({
+    by: ['businessId'],
+    where: {
+      ...activeOfferWhere(now),
+      ...(businessIds ? { businessId: { in: businessIds.map(Number) } } : {}),
+      business: {
+        isActive: true,
+        publicationStatus: 'PUBLISHED',
+        ...(cityId ? { cityId: Number(cityId) } : {}),
+      },
+    },
+    _max: { discountPercent: true },
+    _count: { _all: true },
+  });
+}
+
+async function getActiveOfferSummaryMap(businessIds, now = new Date()) {
+  const rows = await getActiveOfferSummaryRows({ businessIds, now });
+  return new Map(rows.map((row) => [
+    row.businessId,
+    {
+      maxDiscountPercent: row._max.discountPercent || null,
+      activeOfferCount: row._count._all || 0,
+    },
+  ]));
+}
+
 async function listBusinesses(query, appUserId = null) {
   const { languages, selectedLanguage } = await resolveLanguage(query.lang);
   const fallbackLanguage = languages.find((item) => item.isDefault) || languages[0];
@@ -1046,6 +1088,7 @@ async function listBusinesses(query, appUserId = null) {
 
   const reviewStats = await getBusinessReviewStats(businesses.map((business) => business.id));
   const favoriteIds = await getFavoriteBusinessIds(appUserId, businesses.map((business) => business.id));
+  const offerSummaries = await getActiveOfferSummaryMap(businesses.map((business) => business.id));
   const rootServiceTypes = await getRootServiceTypeMap(businesses.map((business) => business.serviceType.id), selectedLanguage, fallbackLanguage);
   let items = businesses.map((business) =>
     normalizeExploreBusiness(
@@ -1056,6 +1099,7 @@ async function listBusinesses(query, appUserId = null) {
       favoriteIds.has(business.id),
       query.centerLat,
       query.centerLng,
+      offerSummaries.get(business.id),
     ),
   );
 
@@ -1081,6 +1125,124 @@ async function listBusinesses(query, appUserId = null) {
       total,
       pageCount: Math.ceil(total / pageSize),
       categories,
+    },
+  };
+}
+
+async function listOfferRanges(query) {
+  const { languages, selectedLanguage } = await resolveLanguage(query.lang);
+  const fallbackLanguage = languages.find((item) => item.isDefault) || languages[0];
+  const rows = await getActiveOfferSummaryRows({ cityId: query.cityId });
+  const businessIds = rows.map((row) => row.businessId);
+  const businesses = businessIds.length
+    ? await prisma.business.findMany({
+      where: { id: { in: businessIds } },
+      select: {
+        id: true,
+        slug: true,
+        logoImage: true,
+        coverImage: true,
+        verticalImage: true,
+        translations: {
+          where: {
+            lang: { in: [selectedLanguage.code, fallbackLanguage.code] },
+            isActive: true,
+          },
+          select: { lang: true, title: true },
+        },
+      },
+    })
+    : [];
+  const businessMap = new Map(businesses.map((business) => [business.id, business]));
+
+  const items = DISCOUNT_RANGES.map((range) => {
+    const rangeRows = rows
+      .filter((row) => discountBelongsToRange(row._max.discountPercent, range.key))
+      .sort((first, second) => (
+        (second._max.discountPercent || 0) - (first._max.discountPercent || 0)
+        || second.businessId - first.businessId
+      ));
+    return {
+      ...range,
+      businessCount: rangeRows.length,
+      previews: rangeRows.slice(0, 3).map((row) => {
+        const business = businessMap.get(row.businessId);
+        const translation = business
+          ? pickTranslation(business.translations, selectedLanguage, fallbackLanguage)
+          : null;
+        return {
+          id: row.businessId,
+          title: translation?.title || business?.slug || '',
+          image: toPublicAsset(
+            business?.coverImage || business?.verticalImage || business?.logoImage,
+          ),
+        };
+      }),
+    };
+  });
+
+  return { lang: selectedLanguage.code, items };
+}
+
+async function listOfferBusinesses(query, appUserId = null) {
+  const { languages, selectedLanguage } = await resolveLanguage(query.lang);
+  const fallbackLanguage = languages.find((item) => item.isDefault) || languages[0];
+  const page = query.page;
+  const pageSize = query.pageSize;
+  const rows = (await getActiveOfferSummaryRows({ cityId: query.cityId }))
+    .filter((row) => discountBelongsToRange(row._max.discountPercent, query.rangeKey))
+    .sort((first, second) => (
+      (second._max.discountPercent || 0) - (first._max.discountPercent || 0)
+      || second.businessId - first.businessId
+    ));
+  const total = rows.length;
+  const pageRows = rows.slice((page - 1) * pageSize, page * pageSize);
+  const businessIds = pageRows.map((row) => row.businessId);
+  const businesses = businessIds.length
+    ? await prisma.business.findMany({
+      where: { id: { in: businessIds } },
+      select: businessPublicSelect(selectedLanguage, fallbackLanguage),
+    })
+    : [];
+  const businessMap = new Map(businesses.map((business) => [business.id, business]));
+  const reviewStats = await getBusinessReviewStats(businessIds);
+  const favoriteIds = await getFavoriteBusinessIds(appUserId, businessIds);
+  const rootServiceTypes = await getRootServiceTypeMap(
+    businesses.map((business) => business.serviceType.id),
+    selectedLanguage,
+    fallbackLanguage,
+  );
+  const rowMap = new Map(pageRows.map((row) => [
+    row.businessId,
+    {
+      maxDiscountPercent: row._max.discountPercent || null,
+      activeOfferCount: row._count._all || 0,
+    },
+  ]));
+
+  const items = pageRows
+    .map((row) => businessMap.get(row.businessId))
+    .filter(Boolean)
+    .map((business) => normalizeExploreBusiness(
+      { ...business, rootServiceType: rootServiceTypes.get(business.serviceType.id) },
+      selectedLanguage,
+      fallbackLanguage,
+      reviewStats.get(business.id),
+      favoriteIds.has(business.id),
+      undefined,
+      undefined,
+      rowMap.get(business.id),
+    ));
+
+  return {
+    items,
+    meta: {
+      lang: selectedLanguage.code,
+      page,
+      pageSize,
+      total,
+      pageCount: Math.ceil(total / pageSize),
+      rangeKey: query.rangeKey,
     },
   };
 }
@@ -1174,7 +1336,16 @@ async function getBusinessFilters(query) {
   };
 }
 
-function normalizeExploreBusiness(business, selectedLanguage, fallbackLanguage, reviewStats, isFavorite = false, centerLat, centerLng) {
+function normalizeExploreBusiness(
+  business,
+  selectedLanguage,
+  fallbackLanguage,
+  reviewStats,
+  isFavorite = false,
+  centerLat,
+  centerLng,
+  offerSummary = null,
+) {
   const translation = pickTranslation(business.translations, selectedLanguage, fallbackLanguage);
   const cityTranslation = business.city ? pickTranslation(business.city.translations, selectedLanguage, fallbackLanguage) : null;
   const areaTranslation = business.area ? pickTranslation(business.area.translations, selectedLanguage, fallbackLanguage) : null;
@@ -1196,6 +1367,8 @@ function normalizeExploreBusiness(business, selectedLanguage, fallbackLanguage, 
     economicLevel: business.economicLevel,
     averageRating: Math.round(rating.averageRating * 10) / 10,
     reviewCount: rating.reviewCount,
+    maxDiscountPercent: offerSummary?.maxDiscountPercent || null,
+    activeOfferCount: offerSummary?.activeOfferCount || 0,
     latitude,
     longitude,
     distanceMeters: distanceInMeters(centerLat, centerLng, latitude, longitude),
@@ -1728,8 +1901,54 @@ async function getBusinessDetail(businessId, query, appUserId = null) {
     null,
     false,
   );
-  const reviewOverview = await getReviewOverview(business.id);
-  const favoriteIds = await getFavoriteBusinessIds(appUserId, [business.id]);
+  const [reviewOverview, favoriteIds, activeOfferRows] = await Promise.all([
+    getReviewOverview(business.id),
+    getFavoriteBusinessIds(appUserId, [business.id]),
+    prisma.businessOffer.findMany({
+      where: {
+        businessId: business.id,
+        ...activeOfferWhere(),
+      },
+      orderBy: [{ discountPercent: 'desc' }, { displayOrder: 'asc' }, { id: 'asc' }],
+      select: {
+        id: true,
+        discountPercent: true,
+        scope: true,
+        categoryId: true,
+        startsAt: true,
+        endsAt: true,
+        translations: {
+          where: {
+            lang: { in: [selectedLanguage.code, fallbackLanguage.code] },
+            isActive: true,
+          },
+          select: { lang: true, title: true, description: true },
+        },
+        targets: { select: { offeringId: true } },
+      },
+    }),
+  ]);
+  const activeOffers = activeOfferRows.map((offer) => {
+    const offerTranslation = pickTranslation(
+      offer.translations,
+      selectedLanguage,
+      fallbackLanguage,
+    );
+    return {
+      targetIds: new Set(offer.targets.map((target) => target.offeringId)),
+      payload: {
+        id: offer.id,
+        title: offerTranslation?.title || '',
+        description: offerTranslation?.description || '',
+        discountPercent: offer.discountPercent,
+        scope: offer.scope,
+        startsAt: offer.startsAt,
+        endsAt: offer.endsAt,
+      },
+      categoryId: offer.categoryId,
+      scope: offer.scope,
+    };
+  });
   const selectedAttributes = new Map();
 
   for (const item of business.businessAttributes) {
@@ -1775,6 +1994,8 @@ async function getBusinessDetail(businessId, query, appUserId = null) {
     operationMode: business.operationMode,
     averageRating: reviewOverview.averageRating,
     reviewCount: reviewOverview.reviewCount,
+    maxDiscountPercent: activeOffers[0]?.payload.discountPercent || null,
+    activeOffers: activeOffers.map((offer) => offer.payload),
     ratingBreakdown: reviewOverview.breakdown,
     openNow: isOpenNow(business.workingHours),
     slideshows: business.slideshows.map((item) => ({ id: item.id, image: toPublicAsset(item.image), displayOrder: item.displayOrder })),
@@ -1789,13 +2010,23 @@ async function getBusinessDetail(businessId, query, appUserId = null) {
         title: categoryTranslation?.title || category.title,
         offerings: category.offerings.map((offering) => {
           const offeringTranslation = pickTranslation(offering.translations, selectedLanguage, fallbackLanguage);
+          const basePrice = offering.basePrice === null ? null : Number(offering.basePrice);
+          const effectiveOffer = activeOffers.find((offer) => (
+            offer.scope === 'ALL'
+            || (offer.scope === 'CATEGORY' && offer.categoryId === category.id)
+            || (offer.scope === 'OFFERINGS' && offer.targetIds.has(offering.id))
+          ));
           return {
             id: offering.id,
             title: offeringTranslation?.title || offering.title,
             description: offeringTranslation?.shortDescription || '',
             image: toPublicAsset(offering.image),
-            basePrice: offering.basePrice === null ? null : Number(offering.basePrice),
+            basePrice,
+            finalPrice: effectiveOffer
+              ? calculateDiscountedPrice(basePrice, effectiveOffer.payload.discountPercent)
+              : basePrice,
             oldPrice: offering.oldPrice === null ? null : Number(offering.oldPrice),
+            offer: effectiveOffer?.payload || null,
             isFeatured: offering.isFeatured,
             isPopular: offering.isPopular,
             isNew: offering.isNew,
@@ -2030,6 +2261,8 @@ module.exports = {
   getHome,
   getExplore,
   listBusinesses,
+  listOfferRanges,
+  listOfferBusinesses,
   getBusinessFilters,
   listOnboardingPages,
   getContentPage,
