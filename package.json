@@ -15,6 +15,7 @@
     "seed:demo:super-app": "node scripts/strip-bom-prisma.js && node prisma/seed-super-app-demo.js",
     "seed:demo:classifieds": "node scripts/strip-bom-prisma.js && node prisma/seed-classifieds-demo.js && node prisma/seed-classified-taxonomy.js && node prisma/seed-classifieds-demo-values.js",
     "seed:classifieds:taxonomy": "node scripts/strip-bom-prisma.js && node prisma/seed-classified-taxonomy.js",
+    "seed:classifieds:attributes": "node scripts/strip-bom-prisma.js && node prisma/seed-classified-attributes.js",
     "seed:demo:content": "node scripts/strip-bom-prisma.js && node prisma/seed-content-demo.js",
     "test": "node --test \"tests/**/*.test.js\"",
     "test:db": "node --test \"tests/**/*.integration.js\"",

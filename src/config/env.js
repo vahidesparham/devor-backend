@@ -35,6 +35,7 @@ const env = {
   JWT_REFRESH_SECRET: process.env.JWT_REFRESH_SECRET,
   JWT_EXPIRES_IN: process.env.JWT_EXPIRES_IN,
   JWT_REFRESH_EXPIRES_IN: process.env.JWT_REFRESH_EXPIRES_IN,
+  SETTINGS_ENCRYPTION_KEY: process.env.SETTINGS_ENCRYPTION_KEY || process.env.JWT_SECRET,
   CORS_ORIGINS: (process.env.CORS_ORIGINS || '*')
     .split(',')
     .map((v) => v.trim())

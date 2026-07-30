@@ -319,6 +319,23 @@ async function seedPanelSettings() {
     });
 }
 
+async function seedSmsSettings() {
+    await prisma.smsSetting.upsert({
+        where: { id: 1 },
+        update: {},
+        create: {
+            id: 1,
+            provider: "PAYOM",
+            isEnabled: false,
+            sendMode: "TEMPLATE",
+            templateCodeVariable: "code",
+            textTemplate: "Devor verification code: {code}",
+            messageType: "SMS",
+            requestTimeoutMs: 10000,
+        },
+    });
+}
+
 async function seedClassifiedSettings() {
     await prisma.classifiedSetting.upsert({
         where: { id: CLASSIFIED_SETTINGS_ID },
@@ -351,6 +368,7 @@ async function main() {
     await seedLanguages();
     await seedImageConfigs();
     await seedPanelSettings();
+    await seedSmsSettings();
     await seedClassifiedSettings();
     await seedContactPage();
     await seedBusinessPermissions();

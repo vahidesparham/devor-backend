@@ -43,11 +43,11 @@ app.use(
         crossOriginResourcePolicy: { policy: "cross-origin" },
     }),
 );
+app.use("/public", cors(), express.static(path.join(process.cwd(), "public")));
+app.use("/uploads", cors(), express.static(path.join(process.cwd(), "public", "uploads")));
 app.use(cors(corsOptions));
 app.use(express.json({ limit: env.REQUEST_SIZE_LIMIT }));
 app.use(express.urlencoded({ extended: false, limit: env.REQUEST_SIZE_LIMIT }));
-app.use("/public", express.static(path.join(process.cwd(), "public")));
-app.use("/uploads", express.static(path.join(process.cwd(), "public", "uploads")));
 
 app.get("/health", (_req, res) => {
     return ok(res, {

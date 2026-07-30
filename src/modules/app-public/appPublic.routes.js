@@ -1,4 +1,5 @@
 const express = require('express');
+const rateLimit = require('express-rate-limit');
 const multer = require('multer');
 const validate = require('../../middlewares/validate');
 const appAuth = require('../../middlewares/appAuth');
@@ -31,6 +32,21 @@ const {
 } = require('./appPublic.schemas');
 
 const router = express.Router();
+const otpRequestRateLimiter = rateLimit({
+  windowMs: 10 * 60 * 1000,
+  max: 10,
+  standardHeaders: true,
+  legacyHeaders: false,
+  handler: (req, res) => res.status(429).json({
+    ok: false,
+    code: 'OTP_RATE_LIMITED',
+    message: 'Too many OTP requests. Please try again later.',
+    data: null,
+    meta: null,
+    errors: null,
+    traceId: req.traceId || null,
+  }),
+});
 const imageUpload = multer({
   storage: multer.memoryStorage(),
   limits: { fileSize: 10 * 1024 * 1024 },
@@ -98,7 +114,12 @@ router.get(
   validate(langQuerySchema, 'query'),
   controller.contentPage,
 );
-router.post('/auth/request-otp', validate(requestOtpSchema), authController.requestOtp);
+router.post(
+  '/auth/request-otp',
+  otpRequestRateLimiter,
+  validate(requestOtpSchema),
+  authController.requestOtp,
+);
 router.post('/auth/verify-otp', validate(verifyOtpSchema), authController.verifyOtp);
 router.post('/auth/refresh', validate(refreshSchema), authController.refresh);
 router.get('/auth/me', appAuth, authController.me);

@@ -332,6 +332,24 @@ model PanelSetting {
   updatedAt    DateTime @updatedAt
 }
 
+model SmsSetting {
+  id                   Int      @id
+  provider             String   @default("PAYOM") @db.VarChar(30)
+  isEnabled            Boolean  @default(false)
+  apiBaseUrl           String?  @db.VarChar(500)
+  apiTokenEncrypted    String?  @db.Text
+  apiTokenLastFour     String?  @db.VarChar(8)
+  senderName           String?  @db.VarChar(11)
+  sendMode             String   @default("TEMPLATE") @db.VarChar(20)
+  templateId           String?  @db.VarChar(191)
+  templateCodeVariable String   @default("code") @db.VarChar(80)
+  textTemplate         String   @default("Devor verification code: {code}") @db.VarChar(500)
+  messageType          String   @default("SMS") @db.VarChar(20)
+  requestTimeoutMs     Int      @default(10000)
+  createdAt            DateTime @default(now())
+  updatedAt            DateTime @updatedAt
+}
+
 model AuditLog {
   id        BigInt      @id @default(autoincrement())
   createdAt DateTime    @default(now())

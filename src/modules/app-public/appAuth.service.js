@@ -4,9 +4,11 @@ const prisma = require('../../prisma');
 const env = require('../../config/env');
 const { AppError } = require('../../shared/http/response');
 const uploadService = require('../uploads/upload.service');
+const payomSmsService = require('../sms/payomSms.service');
 
 function normalizePhone(phone) {
-  return String(phone || '').replace(/[^\d+]/g, '');
+  const digits = String(phone || '').replace(/\D/g, '');
+  return digits ? `+${digits}` : '';
 }
 
 function hashToken(token) {
@@ -64,7 +66,7 @@ async function saveRefreshToken(userId, refreshToken, req) {
 async function requestOtp(data) {
   const phone = normalizePhone(data.phone);
   const code = generateOtp();
-  await prisma.appOtpChallenge.create({
+  const challenge = await prisma.appOtpChallenge.create({
     data: {
       phone,
       countryCode: data.countryCode || null,
@@ -74,7 +76,20 @@ async function requestOtp(data) {
     },
   });
 
-  return { phone, otp: code, expiresInSeconds: 300 };
+  let delivery;
+  try {
+    delivery = await payomSmsService.sendOtp({ phone, code });
+  } catch (error) {
+    await prisma.appOtpChallenge.delete({ where: { id: challenge.id } }).catch(() => {});
+    throw error;
+  }
+
+  return {
+    phone,
+    otp: code,
+    expiresInSeconds: 300,
+    smsSent: delivery.sent,
+  };
 }
 
 async function verifyOtp(data, req) {
